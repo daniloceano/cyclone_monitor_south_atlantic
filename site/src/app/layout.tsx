@@ -17,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full">
-      <body className={`${inter.className} h-full bg-slate-950 text-slate-100 antialiased`}>
+      <body className={`${inter.className} h-full bg-white text-gray-900 antialiased`}>
         {children}
       </body>
     </html>

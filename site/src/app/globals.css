@@ -3,33 +3,32 @@
 @tailwind utilities;
 
 /* ── Leaflet overrides ─────────────────────────────────────────────────────── */
-/* Leaflet injects its own z-index values; these keep the map behind our UI. */
 .leaflet-container {
-  background: #0f172a; /* slate-950 — ocean background before tiles load */
+  background: #e8ecf0; /* light ocean background before tiles load */
   font-family: inherit;
 }
 
 .leaflet-control-attribution {
   font-size: 10px;
-  background: rgba(15, 23, 42, 0.75) !important;
-  color: #94a3b8 !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  color: #6b7280 !important;
 }
 
 .leaflet-control-attribution a {
-  color: #60a5fa !important;
+  color: #2563eb !important;
 }
 
 .leaflet-control-zoom a {
-  background: #1e293b !important;
-  color: #e2e8f0 !important;
-  border-color: #334155 !important;
+  background: #ffffff !important;
+  color: #374151 !important;
+  border-color: #d1d5db !important;
 }
 
 .leaflet-control-zoom a:hover {
-  background: #334155 !important;
+  background: #f3f4f6 !important;
 }
 
-/* ── Scrollbar styling ─────────────────────────────────────────────────────── */
+/* ── Custom scrollbar ──────────────────────────────────────────────────────── */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
@@ -37,9 +36,22 @@
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #d1d5db;
   border-radius: 2px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #9ca3af;
+}
+
+/* ── Tooltip text reset for light theme ────────────────────────────────────── */
+.leaflet-tooltip {
+  background: rgba(255, 255, 255, 0.97) !important;
+  border: 1px solid #e5e7eb !important;
+  color: #111827 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+}
+.leaflet-tooltip::before {
+  border-top-color: #e5e7eb !important;
 }

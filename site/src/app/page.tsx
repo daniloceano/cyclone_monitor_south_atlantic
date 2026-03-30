@@ -15,8 +15,8 @@ import Header from "@/components/Header";
 const CycloneMap = dynamic(() => import("@/components/CycloneMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-full bg-slate-950">
-      <p className="text-slate-400 text-sm">Initialising map…</p>
+    <div className="flex items-center justify-center h-full bg-gray-100">
+      <p className="text-gray-400 text-sm">Initialising map…</p>
     </div>
   ),
 });
@@ -92,11 +92,11 @@ export default function HomePage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   if (initialLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-950">
+      <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-slate-300 text-sm">Loading cyclone dataset…</p>
-          <p className="text-slate-500 text-xs mt-1">6 789 tracks · 1979–2020</p>
+          <p className="text-gray-600 text-sm">Loading cyclone dataset…</p>
+          <p className="text-gray-400 text-xs mt-1">6 789 tracks · 1979–2020</p>
         </div>
       </div>
     );
@@ -104,13 +104,13 @@ export default function HomePage() {
 
   if (loadError) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-950">
+      <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="max-w-sm text-center">
-          <p className="text-red-400 font-semibold mb-2">Failed to load data</p>
-          <p className="text-slate-400 text-sm">{loadError}</p>
-          <p className="text-slate-500 text-xs mt-3">
+          <p className="text-red-600 font-semibold mb-2">Failed to load data</p>
+          <p className="text-gray-600 text-sm">{loadError}</p>
+          <p className="text-gray-400 text-xs mt-3">
             Ensure you have run{" "}
-            <code className="bg-slate-800 px-1 rounded">npm run preprocess</code>{" "}
+            <code className="bg-gray-200 px-1 rounded">npm run preprocess</code>{" "}
             to generate the processed data files.
           </p>
         </div>
@@ -128,7 +128,7 @@ export default function HomePage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left sidebar ───────────────────────────────────────────────── */}
-        <aside className="w-72 xl:w-80 flex-shrink-0 bg-slate-900 border-r border-slate-700/60 flex flex-col overflow-hidden">
+        <aside className="w-72 xl:w-80 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden shadow-sm">
           <FilterPanel
             summaryData={summaryData!}
             filters={filters}

@@ -135,12 +135,16 @@ export const MONTH_NAMES = [
  *   de Souza et al. (JOSS, 2025) https://doi.org/10.21105/joss.07363
  *   de Souza et al. (IJC, 2024)  https://doi.org/10.1002/joc.8566
  */
+/**
+ * Phase colours matching the CycloPhaser convention used in de Souza et al. (2024, IJC).
+ * Palette chosen to match the colours in that publication's lifecycle diagrams.
+ */
 export const PHASE_COLORS: Record<string, string> = {
-  incipient:       "#22c55e",   // green
-  intensification: "#f59e0b",   // amber
-  mature:          "#ef4444",   // red
-  decay:           "#a78bfa",   // violet
-  dissipation:     "#64748b",   // slate
+  incipient:       "#5B9BD5",   // steel blue
+  intensification: "#ED7D31",   // orange
+  mature:          "#843C0C",   // dark brown-orange
+  decay:           "#70AD47",   // medium green
+  dissipation:     "#7F7F7F",   // neutral gray
 };
 
 export const PHASE_LABELS: Record<string, string> = {

@@ -40,18 +40,18 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-900/50 border border-blue-700 mb-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-50 border border-blue-200 mb-4">
             {/* Cyclone icon */}
             <svg
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="1.5"
-              className="w-7 h-7 text-blue-400"
+              className="w-7 h-7 text-blue-600"
             >
               <path
                 strokeLinecap="round"
@@ -70,10 +70,10 @@ function LoginForm() {
               />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold text-slate-100">
+          <h1 className="text-xl font-semibold text-gray-900">
             South Atlantic Cyclone Monitor
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             Extratropical cyclone tracks · 1979–2020
           </p>
         </div>
@@ -81,12 +81,12 @@ function LoginForm() {
         {/* Form */}
         <form
           onSubmit={handleSubmit}
-          className="bg-slate-900 border border-slate-700 rounded-xl p-6 space-y-4"
+          className="bg-white border border-gray-200 rounded-xl p-6 space-y-4 shadow-sm"
         >
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-slate-300 mb-1.5"
+              className="block text-sm font-medium text-gray-700 mb-1.5"
             >
               Access password
             </label>
@@ -98,14 +98,14 @@ function LoginForm() {
               placeholder="Enter password"
               required
               autoFocus
-              className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100
-                         placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+              className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900
+                         placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                          transition"
             />
           </div>
 
           {error && (
-            <p className="text-xs text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -113,14 +113,14 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading || !password}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
                        text-white text-sm font-medium rounded-lg px-4 py-2.5 transition"
           >
             {loading ? "Verifying…" : "Enter"}
           </button>
         </form>
 
-        <p className="text-center text-xs text-slate-600 mt-4">
+        <p className="text-center text-xs text-gray-400 mt-4">
           IAG-USP · Petrobras/CENPES Cooperation
         </p>
       </div>

@@ -50,11 +50,11 @@ interface CycloneMapProps {
 const MAP_CENTER: [number, number] = [-42, -35];
 const MAP_ZOOM = 3;
 
-// Polyline style constants
-const STYLE_DEFAULT = { color: "#3b82f6", weight: 1, opacity: 0.35 };
-const STYLE_HOVER   = { color: "#60a5fa", weight: 2, opacity: 0.75 };
-const STYLE_SELECTED = { color: "#f97316", weight: 2.5, opacity: 1 };
-const STYLE_DIMMED  = { color: "#1e3a5f", weight: 0.8, opacity: 0.2 };
+// Polyline style constants (tuned for light CARTO base layer)
+const STYLE_DEFAULT  = { color: "#2563eb", weight: 1,   opacity: 0.30 };
+const STYLE_HOVER    = { color: "#1d4ed8", weight: 2,   opacity: 0.70 };
+const STYLE_SELECTED = { color: "#ea580c", weight: 2.5, opacity: 1    };
+const STYLE_DIMMED   = { color: "#93c5fd", weight: 0.8, opacity: 0.18 };
 
 export default function CycloneMap({
   tracks,
@@ -79,9 +79,9 @@ export default function CycloneMap({
       className="z-0"
       preferCanvas
     >
-      {/* Base tile layer — dark ocean-friendly style */}
+      {/* Base tile layer — light style */}
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png"
+        url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
         subdomains="abcd"
         maxZoom={19}
@@ -126,7 +126,7 @@ export default function CycloneMap({
             radius={4}
             pathOptions={{
               fillColor: color,
-              color: "#0f172a",
+              color: "#ffffff",
               weight: 1,
               fillOpacity: 0.9,
             }}
