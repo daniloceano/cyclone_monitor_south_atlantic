@@ -10,6 +10,18 @@ Built as a private scientific demonstration for the IAG-USP / Petrobras–CENPES
 
 ---
 
+## Data sources
+
+| Dataset | Reference |
+|---------|-----------|
+| Cyclone tracks | Gramcianinov et al. **Atlantic extratropical cyclone tracks in 41 years of ERA5 and CFSR/CFSv2 databases**. Mendeley Data. DOI: [10.17632/kwcvfr52hp.4](https://doi.org/10.17632/kwcvfr52hp.4) |
+| LEC diagnostics | **Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian LEC diagnostics (1979–2020)**. Zenodo. DOI: [10.5281/zenodo.18133432](https://doi.org/10.5281/zenodo.18133432) |
+| Genesis regions | Gramcianinov, C. B., Hodges, K. I., & Camargo, R. D. (2019). The properties and genesis environments of South Atlantic cyclones. *Climate Dynamics*, 53(7), 4115–4140. DOI: [10.1007/s00382-019-04778-7](https://doi.org/10.1007/s00382-019-04778-7) |
+| Lifecycle phases | de Souza, D. C. et al. (2025). Cyclophaser: A Python package for detecting extratropical cyclone life cycles. *JOSS*, 10(108), 7363. DOI: [10.21105/joss.07363](https://doi.org/10.21105/joss.07363) |
+| Phase analysis | Couto de Souza, D. et al. (2024). New perspectives on South Atlantic storm track through an automatic method for detecting extratropical cyclones' lifecycle. *Int. J. Climatol.*, 44(10), 3568–3588. DOI: [10.1002/joc.8566](https://doi.org/10.1002/joc.8566) |
+
+---
+
 ## Stack
 
 | Layer | Technology |
@@ -18,7 +30,7 @@ Built as a private scientific demonstration for the IAG-USP / Petrobras–CENPES
 | Language | TypeScript |
 | Map | Leaflet 1.9 + React-Leaflet 4 |
 | Styling | Tailwind CSS 3 |
-| Deployment | Vercel |
+| Deployment | Vercel (root directory: `site/`) |
 | Auth | httpOnly cookie + Next.js middleware |
 
 ---
@@ -31,42 +43,26 @@ cyclone_monitor_south_atlantic/
 │   └── raw/
 │       └── tracks_SAt_filtered_with_energetics.csv   ← source data (not committed)
 ├── scripts/
-│   └── preprocess_data.py                            ← CSV → JSON pipeline
-├── public/
-│   └── data/
-│       ├── summary.json                              ← all track summaries + line coords
-│       └── details/
-│           ├── 1979.json
-│           ├── 1980.json
-│           └── ...                                   ← per-year full timestep data
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx                                  ← main map page
-│   │   ├── globals.css
-│   │   ├── login/page.tsx
-│   │   └── api/auth/
-│   │       ├── route.ts                              ← login endpoint
-│   │       └── logout/route.ts
-│   ├── components/
-│   │   ├── CycloneMap.tsx                            ← Leaflet map (ssr:false)
-│   │   ├── FilterPanel.tsx
-│   │   ├── TrackDetailPanel.tsx
-│   │   └── Header.tsx
-│   ├── lib/
-│   │   ├── dataLoader.ts
-│   │   ├── filters.ts
-│   │   └── utils.ts
-│   └── types/
-│       └── cyclone.ts
-├── middleware.ts                                     ← auth guard
+│   └── preprocess_data.py                            ← CSV → JSON pipeline (run from here)
+├── site/                                             ← Next.js web application
+│   ├── public/
+│   │   └── data/
+│   │       ├── summary.json                          ← all tracks + simplified coords (~10 MB)
+│   │       └── details/{year}.json                   ← full timestep data, loaded on demand
+│   ├── src/
+│   │   ├── app/                                      ← pages, layouts, API routes
+│   │   ├── components/                               ← React components
+│   │   ├── lib/                                      ← data loading, filters, utils
+│   │   └── types/                                    ← TypeScript types
+│   ├── middleware.ts                                  ← auth guard
+│   ├── package.json
+│   └── .env.example
 ├── docs/
 │   ├── data-documentation.md
 │   ├── architecture.md
 │   └── deployment.md
-├── .env.example
-├── package.json
-└── next.config.js
+├── .gitignore
+└── README.md
 ```
 
 ---
@@ -75,53 +71,52 @@ cyclone_monitor_south_atlantic/
 
 ### 1. Prerequisites
 
-- Python 3.9+ with pandas and numpy
-- Node.js 18+ (or install via [nvm](https://github.com/nvm-sh/nvm))
+- Python 3.9+ with `pandas` and `numpy`
+- Node.js 18+ (install via [nvm](https://github.com/nvm-sh/nvm) if needed)
 
-### 2. Clone and place the data file
+### 2. Place the source data
 
 ```bash
-# Place the source CSV at:
+# The CSV must be at:
 data/raw/tracks_SAt_filtered_with_energetics.csv
 ```
 
 ### 3. Run the preprocessing pipeline
 
-Converts the raw CSV into web-optimised JSON artefacts under `public/data/`:
+Run from the **project root** (not from `site/`):
 
 ```bash
 python3 scripts/preprocess_data.py
-# or via npm:
-npm run preprocess
 ```
 
 This generates:
-- `public/data/summary.json` (~10 MB) — one entry per track with metadata and simplified line coordinates
-- `public/data/details/{year}.json` (~1.8 MB each, 43 files) — full per-timestep data, loaded on demand
+- `site/public/data/summary.json` (~10 MB) — all track metadata and simplified line coordinates
+- `site/public/data/details/{year}.json` (~1.8 MB each, 43 files) — full per-timestep data
 
 ### 4. Install dependencies
 
 ```bash
+cd site
 npm install
 ```
 
 ### 5. Configure environment
 
 ```bash
+cd site
 cp .env.example .env.local
-# Edit .env.local and set SITE_PASSWORD
+# Edit .env.local — set SITE_PASSWORD
 ```
 
-The default password in `.env.example` is `tc_petrobras`.
+Default password in `.env.example`: `tc_petrobras`
 
 ### 6. Run locally
 
 ```bash
+cd site
 npm run dev
-# Open http://localhost:3000
+# Open http://localhost:3000 — redirects to /login
 ```
-
-You will be redirected to `/login`. Enter the password to access the map.
 
 ---
 
@@ -129,55 +124,47 @@ You will be redirected to `/login`. Enter the password to access the map.
 
 Authentication uses a simple httpOnly cookie checked by Next.js middleware.
 
-| Setting | Description |
-|---------|-------------|
-| `SITE_PASSWORD` | The access password (required) |
+| Setting | Value |
+|---------|-------|
+| Environment variable | `SITE_PASSWORD` |
 | Cookie name | `cyclone-auth` |
 | Cookie lifetime | 7 days |
-| Logout | Button in top-right header → `/api/auth/logout` |
+| Logout | Header button → `POST /api/auth/logout` |
 
-> **Note:** Static JSON files under `/data/` are served from Vercel's CDN and cannot be
-> gated by middleware without a custom server. This is a soft barrier suitable for a
-> private scientific demo. For strict access control, move data serving to API routes.
+See [docs/deployment.md](docs/deployment.md) for Vercel configuration.
 
 ---
 
 ## Vercel deployment
 
-See [docs/deployment.md](docs/deployment.md) for step-by-step instructions.
+The Next.js app lives in `site/`. When importing the project in Vercel, set
+**Root Directory** to `site`. Then add `SITE_PASSWORD` in environment variables.
 
-Quick reference:
-1. Push the repository (including `public/data/`) to GitHub
-2. Import the project in [vercel.com](https://vercel.com)
-3. In **Project Settings → Environment Variables**, add `SITE_PASSWORD=tc_petrobras`
-4. Deploy
+Full instructions: [docs/deployment.md](docs/deployment.md)
 
 ---
 
-## Data sources
+## Documentation
 
-The dataset is derived from two published resources:
-
-1. **Zenodo** — Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian Lorenz Energy Cycle (LEC) diagnostics (1979–2020)
-   DOI: [10.5281/zenodo.18133432](https://doi.org/10.5281/zenodo.18133432)
-
-2. **Mendeley Data** — Atlantic extratropical cyclone tracks in 41 years of ERA5 and CFSR/CFSv2 databases
-   DOI: [10.17632/kwcvfr52hp.4](https://doi.org/10.17632/kwcvfr52hp.4)
+| File | Contents |
+|------|----------|
+| [docs/data-documentation.md](docs/data-documentation.md) | CSV structure, derived artefacts, region and phase definitions |
+| [docs/architecture.md](docs/architecture.md) | Component tree, state, performance rationale |
+| [docs/deployment.md](docs/deployment.md) | Vercel deploy steps, environment variables |
 
 ---
 
 ## Current limitations
 
-- The 10 MB `summary.json` is loaded on every initial page visit. Served via CDN, it compresses to ~2.5 MB over the wire — acceptable but notable on slow connections.
-- Static files under `public/data/` are publicly accessible at their URLs regardless of the password cookie. This is by design for Vercel static hosting.
-- Lifecycle phase (genesis/intensification/mature/decay/lysis) is derived heuristically from the vor42 time series. No explicit phase labels were present in the source data.
-- Genesis region assignment uses geographic bounding boxes; some ambiguous tracks near region boundaries may be misclassified.
+- The 10 MB `summary.json` is loaded on every initial page visit (~2.5 MB gzip over CDN).
+- Static files under `site/public/data/` are publicly accessible by direct URL regardless of the password cookie — this is a known constraint of Vercel static hosting.
+- Lifecycle phases (incipient/intensification/mature/decay/dissipation) are derived heuristically from the vor42 time series. For rigorous lifecycle analysis, use [Cyclophaser](https://github.com/daniloceano/CycloPhaser) directly.
+- Genesis region bounding boxes are approximations of the hotspots in Gramcianinov et al. (2019).
 
 ## Roadmap
 
-- [ ] Add a statistics dashboard (seasonal climatology, frequency maps)
+- [ ] Integrate Cyclophaser phase labels directly from pre-computed per-track phase files
+- [ ] Statistics dashboard (seasonal climatology, frequency maps)
 - [ ] Export selected track as GeoJSON or CSV
-- [ ] Add intensity colormap to tracks (gradient from genesis to lysis)
-- [ ] Multi-track comparison panel
-- [ ] Move data serving to API routes for stricter access control
-- [ ] Upgrade to Next.js 15+ when ready to address current security advisory
+- [ ] Intensity colormap on tracks (gradient from incipient to dissipation)
+- [ ] Upgrade to Next.js 15+ to address current security advisory

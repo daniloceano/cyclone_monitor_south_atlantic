@@ -1,9 +1,35 @@
 # Architecture
 
+## Repository layout
+
+```
+cyclone_monitor_south_atlantic/
+├── data/                              # Data (raw CSV not committed)
+│   └── raw/
+│       └── tracks_SAt_filtered_with_energetics.csv
+├── scripts/
+│   └── preprocess_data.py             # CSV → JSON pipeline (run from project root)
+├── site/                              # Next.js web application
+│   ├── public/
+│   │   └── data/                      # Pre-processed static JSON (committed)
+│   │       ├── summary.json
+│   │       └── details/{year}.json
+│   ├── src/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── lib/
+│   │   └── types/
+│   ├── middleware.ts
+│   ├── package.json
+│   └── next.config.js
+├── docs/
+└── README.md
+```
+
 ## Design principle: no raw CSV in the browser
 
-The source CSV is 66 MB and contains 631 009 rows. Loading it in the browser would cause
-unacceptable initial load times and memory usage. Instead, a Python preprocessing script
+The source CSV is 66 MB / 631 009 rows. Loading it in the browser would cause
+unacceptable initial load times and memory usage. A Python preprocessing script
 converts it into two categories of static JSON artefacts served from Vercel's CDN:
 
 ```
@@ -54,8 +80,8 @@ page.tsx  (state owner)
 
 ## State management
 
-All state is owned by `page.tsx` and passed down as props. No Context or external state
-library is used — the component tree is shallow enough that prop drilling is clean.
+All state is owned by `page.tsx` and passed down as props. No Context or external
+state library — the component tree is shallow enough that prop drilling is clean.
 
 | State | Description |
 |-------|-------------|
@@ -79,8 +105,7 @@ library is used — the component tree is shallow enough that prop drilling is c
 
 Leaflet accesses `window` and `document` at import time, which crashes Next.js SSR.
 The map component is imported with `dynamic(() => import('@/components/CycloneMap'), { ssr: false })`.
-All Leaflet-specific code (imports, L.canvas(), icon fixes) lives inside `CycloneMap.tsx`
-and never executes on the server.
+All Leaflet-specific code lives inside `CycloneMap.tsx` and never executes on the server.
 
 ## Authentication
 
@@ -95,5 +120,9 @@ Request to /  →  middleware.ts checks cookie "cyclone-auth"
 - Cookie is httpOnly (not accessible to JavaScript)
 - Cookie is set by `POST /api/auth` which compares against `SITE_PASSWORD` env var
 - `POST /api/auth/logout` sets the cookie to empty string with `maxAge: 0`
-- Static files under `/data/` bypass middleware and are always accessible by direct URL
-  (this is a known limitation of Vercel static file hosting — acceptable for an MVP)
+- Static files under `/data/` bypass middleware (Vercel CDN serves them directly)
+
+## Vercel deployment root
+
+Because the Next.js app lives in `site/`, the **Vercel root directory** must be
+set to `site/`. See [deployment.md](deployment.md) for details.
