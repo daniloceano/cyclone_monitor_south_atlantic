@@ -283,69 +283,77 @@ function DiagramView({
         Boundary terms (BAz, BKz, etc.) shown as simple labels with values below.
       */}
       
-      <div className="flex flex-col items-center gap-1">
-        {/* ═══ Row 1: Top generation terms ═══ */}
-        <div className="flex items-end justify-center gap-8 mb-1">
-          <div className="w-16" /> {/* spacer for BAz */}
-          <ExternalTerm label="Gz" value={averages.Gz} color={LEC_COLORS.latentHeat} fmt={fmt} />
-          <div className="w-12" /> {/* spacer for Cz arrow */}
-          <ExternalTerm label="RKz" value={null} color={LEC_COLORS.boundary} fmt={fmt} />
-          <div className="w-16" /> {/* spacer for BKz */}
-        </div>
+      {/*
+        LEC Box Diagram - CSS Grid layout for perfect alignment
         
-        {/* ═══ Arrow down from Gz ═══ */}
-        <div className="flex justify-center gap-8 -my-1">
-          <div className="w-16" />
-          <div className="text-lg" style={{ color: LEC_COLORS.latentHeat }}>↓</div>
-          <div className="w-12" />
-          <div className="w-10" />
-          <div className="w-16" />
-        </div>
+        Grid structure (5 columns × 7 rows):
+        
+           Col0      Col1       Col2      Col3       Col4
+        ──────────────────────────────────────────────────
+        R0:         Gz                   RKz          
+        R1:         ↓                                  
+        R2: BAz→  [∂Az/∂t]    Cz→     [∂Kz/∂t]    ←BKz
+        R3:         Ca↓                  Ck↑          
+        R4: BAe→  [∂Ae/∂t]    Ce→     [∂Ke/∂t]    ←BKe
+        R5:         ↑                                  
+        R6:         Ge                   RKe          
+      */}
+      <div 
+        className="grid items-center justify-items-center text-center"
+        style={{ 
+          gridTemplateColumns: "50px 70px 50px 70px 50px",
+          gridTemplateRows: "auto auto auto auto auto auto auto",
+          gap: "2px 4px"
+        }}
+      >
+        {/* ═══ Row 0: Top generation terms (Gz, RKz) ═══ */}
+        <div />
+        <ExternalTerm label="Gz" value={averages.Gz} color={LEC_COLORS.latentHeat} fmt={fmt} />
+        <div />
+        <ExternalTerm label="RKz" value={null} color={LEC_COLORS.boundary} fmt={fmt} />
+        <div />
+
+        {/* ═══ Row 1: Arrows from Gz ═══ */}
+        <div />
+        <div className="text-base" style={{ color: LEC_COLORS.latentHeat }}>↓</div>
+        <div />
+        <div />
+        <div />
 
         {/* ═══ Row 2: ∂Az/∂t and ∂Kz/∂t with boundary fluxes ═══ */}
-        <div className="flex items-center justify-center gap-2">
-          <ExternalTerm label="BAz" value={averages.BAz} color={LEC_COLORS.boundary} fmt={fmt} arrow="→" />
-          <TendencyBox label="∂Az/∂t" value={averages.Az} color="#1e40af" subtext="Zonal APE" fmt={fmt} />
-          <ConversionArrow label="Cz" value={averages.Cz} color={LEC_COLORS.latentHeat} fmt={fmt} direction="horizontal" />
-          <TendencyBox label="∂Kz/∂t" value={averages.Kz} color="#3b82f6" subtext="Zonal KE" fmt={fmt} />
-          <ExternalTerm label="BKz" value={averages.BKz} color={LEC_COLORS.boundary} fmt={fmt} arrow="←" />
-        </div>
+        <ExternalTerm label="BAz" value={averages.BAz} color={LEC_COLORS.boundary} fmt={fmt} arrow="→" />
+        <TendencyBox label="∂Az/∂t" value={averages.Az} color="#1e40af" subtext="Zonal APE" fmt={fmt} />
+        <ConversionArrow label="Cz" value={averages.Cz} color={LEC_COLORS.latentHeat} fmt={fmt} direction="horizontal" />
+        <TendencyBox label="∂Kz/∂t" value={averages.Kz} color="#3b82f6" subtext="Zonal KE" fmt={fmt} />
+        <ExternalTerm label="BKz" value={averages.BKz} color={LEC_COLORS.boundary} fmt={fmt} arrow="←" />
 
-        {/* ═══ Row 3: Vertical arrows Ca and Ck ═══ */}
-        <div className="flex items-center justify-center gap-2 -my-1">
-          <div className="w-16" /> {/* spacer for BAz */}
-          <ConversionArrow label="Ca" value={averages.Ca} color={LEC_COLORS.baroclinic} fmt={fmt} direction="vertical-down" />
-          <div className="w-12" /> {/* spacer between arrows */}
-          <ConversionArrow label="Ck" value={averages.Ck} color={LEC_COLORS.barotropic} fmt={fmt} direction="vertical-up" />
-          <div className="w-16" /> {/* spacer for BKz */}
-        </div>
+        {/* ═══ Row 3: Vertical conversions Ca and Ck ═══ */}
+        <div />
+        <ConversionArrow label="Ca" value={averages.Ca} color={LEC_COLORS.baroclinic} fmt={fmt} direction="vertical-down" />
+        <div />
+        <ConversionArrow label="Ck" value={averages.Ck} color={LEC_COLORS.barotropic} fmt={fmt} direction="vertical-up" />
+        <div />
 
         {/* ═══ Row 4: ∂Ae/∂t and ∂Ke/∂t with boundary fluxes ═══ */}
-        <div className="flex items-center justify-center gap-2">
-          <ExternalTerm label="BAe" value={averages.BAe} color={LEC_COLORS.boundary} fmt={fmt} arrow="→" />
-          <TendencyBox label="∂Ae/∂t" value={averages.Ae} color="#dc2626" subtext="Eddy APE" fmt={fmt} />
-          <ConversionArrow label="Ce" value={averages.Ce} color={LEC_COLORS.baroclinic} fmt={fmt} direction="horizontal" />
-          <TendencyBox label="∂Ke/∂t" value={averages.Ke} color="#f97316" subtext="Eddy KE" fmt={fmt} />
-          <ExternalTerm label="BKe" value={averages.BKe} color={LEC_COLORS.boundary} fmt={fmt} arrow="←" />
-        </div>
-        
-        {/* ═══ Arrow up to Ge ═══ */}
-        <div className="flex justify-center gap-8 -my-1">
-          <div className="w-16" />
-          <div className="text-lg" style={{ color: LEC_COLORS.latentHeat }}>↑</div>
-          <div className="w-12" />
-          <div className="w-10" />
-          <div className="w-16" />
-        </div>
+        <ExternalTerm label="BAe" value={averages.BAe} color={LEC_COLORS.boundary} fmt={fmt} arrow="→" />
+        <TendencyBox label="∂Ae/∂t" value={averages.Ae} color="#dc2626" subtext="Eddy APE" fmt={fmt} />
+        <ConversionArrow label="Ce" value={averages.Ce} color={LEC_COLORS.baroclinic} fmt={fmt} direction="horizontal" />
+        <TendencyBox label="∂Ke/∂t" value={averages.Ke} color="#f97316" subtext="Eddy KE" fmt={fmt} />
+        <ExternalTerm label="BKe" value={averages.BKe} color={LEC_COLORS.boundary} fmt={fmt} arrow="←" />
 
-        {/* ═══ Row 5: Bottom generation terms ═══ */}
-        <div className="flex items-start justify-center gap-8 mt-1">
-          <div className="w-16" />
-          <ExternalTerm label="Ge" value={averages.Ge} color={LEC_COLORS.latentHeat} fmt={fmt} />
-          <div className="w-12" />
-          <ExternalTerm label="RKe" value={null} color={LEC_COLORS.boundary} fmt={fmt} />
-          <div className="w-16" />
-        </div>
+        {/* ═══ Row 5: Arrows to Ge ═══ */}
+        <div />
+        <div className="text-base" style={{ color: LEC_COLORS.latentHeat }}>↑</div>
+        <div />
+        <div />
+        <div />
+
+        {/* ═══ Row 6: Bottom generation terms (Ge, RKe) ═══ */}
+        <div />
+        <ExternalTerm label="Ge" value={averages.Ge} color={LEC_COLORS.latentHeat} fmt={fmt} />
+        <div />
+        <ExternalTerm label="RKe" value={null} color={LEC_COLORS.boundary} fmt={fmt} />
+        <div />
       </div>
 
       {/* ═══ Legend ═══ */}
@@ -378,6 +386,9 @@ function DiagramView({
 /**
  * External flux term shown as a simple label with value below.
  * Used for boundary fluxes (BAz, BAe, BKz, BKe) and generation terms (Gz, Ge).
+ * 
+ * ADJUSTMENT GUIDE: This component fills its grid cell. Adjust the parent grid
+ * column widths in DiagramView (gridTemplateColumns) to change sizing.
  */
 function ExternalTerm({
   label,
@@ -395,7 +406,7 @@ function ExternalTerm({
   const isPlaceholder = value === null;
   
   return (
-    <div className="flex flex-col items-center w-16 text-center">
+    <div className="flex flex-col items-center text-center">
       <div className="flex items-center gap-0.5">
         {arrow && !isPlaceholder && (
           <span style={{ color }} className="text-sm font-bold">{arrow}</span>
@@ -422,6 +433,9 @@ function ExternalTerm({
 /**
  * Arrow component for conversion terms (Cz, Ca, Ce, Ck).
  * Shows label, arrow, and value in a compact format.
+ * 
+ * ADJUSTMENT GUIDE: This component fills its grid cell. Adjust the parent grid
+ * column widths in DiagramView (gridTemplateColumns) to change sizing.
  */
 function ConversionArrow({
   label,
@@ -449,21 +463,8 @@ function ConversionArrow({
     }
   };
   
-  const isVertical = direction !== "horizontal";
-  
-  if (isVertical) {
-    return (
-      <div className="flex flex-col items-center w-16 py-1">
-        <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
-        <span className="text-base font-bold" style={{ color }}>{getArrow()}</span>
-        <span className="text-[10px]" style={{ color }}>{fmt(Math.abs(value))}</span>
-      </div>
-    );
-  }
-  
-  // Horizontal layout
   return (
-    <div className="flex flex-col items-center w-12">
+    <div className="flex flex-col items-center">
       <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
       <span className="text-base font-bold" style={{ color }}>{getArrow()}</span>
       <span className="text-[10px]" style={{ color }}>{fmt(Math.abs(value))}</span>
@@ -476,6 +477,8 @@ function ConversionArrow({
 /**
  * Box representing an energy tendency term (∂E/∂t).
  * Shows the reservoir label, type description, and current value.
+ * 
+ * ADJUSTMENT GUIDE: Box size is fixed at 64x64px (w-16 h-16). Adjust here if needed.
  */
 function TendencyBox({
   label,
