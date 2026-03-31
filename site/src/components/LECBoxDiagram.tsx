@@ -74,18 +74,43 @@ function computeAverages(ts: Timestep[]): PhaseAverages | null {
 /**
  * LEC Box Diagram
  *
- * Classic 4-box representation of the Lorenz Energy Cycle:
- *   Az (Zonal APE) → Ca → Ae (Eddy APE)
- *       Cz ↓                 Ce ↓
- *   Kz (Zonal KE) ← Ck ← Ke (Eddy KE)
+ * Four-box representation of the Lorenz Energy Cycle showing energy tendencies:
  *
- * Lifecycle-phase tabs allow comparison across phases.
- * Table view shows all terms (including boundary fluxes) numerically per phase.
+ *        Gz (≈RGz)               (RKz)
+ *            ↓                     
+ *   BAz → [∂Az/∂t]  — Cz →  [∂Kz/∂t] ← BKz
+ *             ↓ Ca              ↑ Ck
+ *   BAe → [∂Ae/∂t]  — Ce →  [∂Ke/∂t] ← BKe
+ *            ↑                     
+ *        Ge (≈RGe)               (RKe)
  *
- * Sign conventions follow LorenzCycleToolkit (de Souza et al., JOSS 2024):
- *   - Positive Ck = Ke→Kz (barotropic dissipation)
- *   - Negative Ck = Kz→Ke (barotropic development / cyclone growth)
+ * Diagram geometry follows the reference figure provided for positive flow directions.
+ * All arrow directions represent the POSITIVE sense of each flux.
  *
+ * Flow conventions (positive direction):
+ *   - Cz: ∂Az/∂t → ∂Kz/∂t (horizontal, right)
+ *   - Ca: ∂Az/∂t → ∂Ae/∂t (vertical, down)
+ *   - Ce: ∂Ae/∂t → ∂Ke/∂t (horizontal, right)
+ *   - Ck: ∂Ke/∂t → ∂Kz/∂t (vertical, up)
+ *
+ * Boundary fluxes (positive = entering the reservoir):
+ *   - BAz: entering ∂Az/∂t from left
+ *   - BAe: entering ∂Ae/∂t from left
+ *   - BKz: entering ∂Kz/∂t from right
+ *   - BKe: entering ∂Ke/∂t from right
+ *
+ * Generation/Residual terms:
+ *   - Gz (≈RGz): entering ∂Az/∂t from top
+ *   - Ge (≈RGe): entering ∂Ae/∂t from bottom
+ *   - RKz, RKe: placeholders (data not available)
+ *
+ * Color semantics:
+ *   - Purple: baroclinic chain (Ca, Ce)
+ *   - Green: barotropic conversion (Ck)
+ *   - Red: latent heat release / zonal generation (Cz, Gz, Ge)
+ *   - Gray: boundary fluxes and residuals
+ *
+ * Sign conventions follow LorenzCycleToolkit (de Souza et al., JOSS 2024).
  * Data source: De Souza et al. (2025), Climate Dynamics.
  */
 export default function LECBoxDiagram({ timesteps }: LECBoxDiagramProps) {
@@ -201,6 +226,20 @@ export default function LECBoxDiagram({ timesteps }: LECBoxDiagramProps) {
 
 // ─── Diagram view ─────────────────────────────────────────────────────────────
 
+/**
+ * Semantic colors for LEC diagram following reference figure convention:
+ * - Purple (#9333ea): Baroclinic chain (Ca, Ce) - eddy growth pathway
+ * - Green (#16a34a): Barotropic conversion (Ck) - zonal/eddy KE exchange
+ * - Red (#dc2626): Latent heat / zonal generation (Cz, Gz, Ge)
+ * - Gray (#6b7280): Boundary fluxes and residuals
+ */
+const LEC_COLORS = {
+  baroclinic: "#9333ea",  // Purple: Ca, Ce
+  barotropic: "#16a34a",  // Green: Ck
+  latentHeat: "#dc2626",  // Red: Cz, Gz, Ge
+  boundary: "#6b7280",    // Gray: BAz, BAe, BKz, BKe
+};
+
 function DiagramView({
   averages,
   phase,
@@ -226,90 +265,269 @@ function DiagramView({
         {" timesteps"}
       </p>
 
-      {/* 5-column grid */}
-      <div className="grid grid-cols-5 gap-2 items-center justify-items-center">
-        {/* Row 1: Generation arrows */}
+      {/*
+        LEC Box Diagram Layout (following reference figure):
+        
+        Layout uses a 5-column × 5-row grid:
+        
+               Col0       Col1         Col2         Col3       Col4
+        Row0:            Gz↓                       (RKz)       
+        Row1:  BAz→    [∂Az/∂t]  ——Cz→→    [∂Kz/∂t]      ←BKz
+        Row2:             ↓Ca               ↑Ck            
+        Row3:  BAe→    [∂Ae/∂t]  ——Ce→→    [∂Ke/∂t]      ←BKe
+        Row4:            Ge↑                       (RKe)
+        
+        Arrow directions shown are for POSITIVE values.
+        When value is negative, arrow direction reverses.
+        
+        Note: RKz and RKe are placeholders (data not available).
+      */}
+      <div className="grid grid-cols-5 gap-1 items-center justify-items-center"
+           style={{ gridTemplateRows: "auto auto auto auto auto" }}>
+        
+        {/* ═══ Row 0: Generation terms entering from top ═══ */}
         <div />
-        <Arrow value={averages.Gz} direction="down" label="Gz" fmt={fmt} />
+        <FluxArrow
+          value={averages.Gz}
+          positiveDirection="down"
+          label="Gz"
+          semanticColor={LEC_COLORS.latentHeat}
+          fmt={fmt}
+          tooltip="Zonal APE generation (entering ∂Az/∂t from top)"
+        />
         <div />
-        <Arrow value={averages.Ge} direction="down" label="Ge" fmt={fmt} />
+        {/* RKz placeholder - data not available */}
+        <div className="text-[9px] text-gray-300 h-9 flex items-center">(RKz)</div>
         <div />
 
-        {/* Row 2: Az and Ae reservoirs */}
+        {/* ═══ Row 1: ∂Az/∂t and ∂Kz/∂t reservoirs with boundary fluxes ═══ */}
+        <FluxArrow
+          value={averages.BAz}
+          positiveDirection="right"
+          label="BAz"
+          semanticColor={LEC_COLORS.boundary}
+          fmt={fmt}
+          tooltip="Az boundary flux (entering ∂Az/∂t from left)"
+        />
+        <TendencyBox
+          label="∂Az/∂t"
+          value={averages.Az}
+          color="#1e40af"
+          subtext="Zonal APE"
+          fmt={fmt}
+        />
+        <FluxArrow
+          value={averages.Cz}
+          positiveDirection="right"
+          label="Cz"
+          semanticColor={LEC_COLORS.latentHeat}
+          fmt={fmt}
+          tooltip="Cz: ∂Az/∂t → ∂Kz/∂t (positive = rightward)"
+        />
+        <TendencyBox
+          label="∂Kz/∂t"
+          value={averages.Kz}
+          color="#3b82f6"
+          subtext="Zonal KE"
+          fmt={fmt}
+        />
+        <FluxArrow
+          value={averages.BKz}
+          positiveDirection="left"
+          label="BKz"
+          semanticColor={LEC_COLORS.boundary}
+          fmt={fmt}
+          tooltip="Kz boundary flux (entering ∂Kz/∂t from right)"
+        />
+
+        {/* ═══ Row 2: Vertical conversions Ca and Ck ═══ */}
         <div />
-        <EnergyBox label="Az" value={averages.Az} color="#1e40af" subtext="Zonal APE" fmt={fmt} />
-        <Arrow value={averages.Ca} direction="right" label="Ca" fmt={fmt} />
-        <EnergyBox label="Ae" value={averages.Ae} color="#dc2626" subtext="Eddy APE" fmt={fmt} />
+        <FluxArrow
+          value={averages.Ca}
+          positiveDirection="down"
+          label="Ca"
+          semanticColor={LEC_COLORS.baroclinic}
+          fmt={fmt}
+          tooltip="Ca: ∂Az/∂t → ∂Ae/∂t (positive = downward, baroclinic)"
+        />
+        <div />
+        <FluxArrow
+          value={averages.Ck}
+          positiveDirection="up"
+          label="Ck"
+          semanticColor={LEC_COLORS.barotropic}
+          fmt={fmt}
+          tooltip="Ck: ∂Ke/∂t → ∂Kz/∂t (positive = upward, barotropic)"
+        />
         <div />
 
-        {/* Row 3: Cz and Ce vertical arrows */}
-        <div />
-        <Arrow value={averages.Cz} direction="down" label="Cz" fmt={fmt} />
-        <div />
-        <Arrow value={averages.Ce} direction="down" label="Ce" fmt={fmt} />
-        <div />
+        {/* ═══ Row 3: ∂Ae/∂t and ∂Ke/∂t reservoirs with boundary fluxes ═══ */}
+        <FluxArrow
+          value={averages.BAe}
+          positiveDirection="right"
+          label="BAe"
+          semanticColor={LEC_COLORS.boundary}
+          fmt={fmt}
+          tooltip="Ae boundary flux (entering ∂Ae/∂t from left)"
+        />
+        <TendencyBox
+          label="∂Ae/∂t"
+          value={averages.Ae}
+          color="#dc2626"
+          subtext="Eddy APE"
+          fmt={fmt}
+        />
+        <FluxArrow
+          value={averages.Ce}
+          positiveDirection="right"
+          label="Ce"
+          semanticColor={LEC_COLORS.baroclinic}
+          fmt={fmt}
+          tooltip="Ce: ∂Ae/∂t → ∂Ke/∂t (positive = rightward, baroclinic)"
+        />
+        <TendencyBox
+          label="∂Ke/∂t"
+          value={averages.Ke}
+          color="#f97316"
+          subtext="Eddy KE"
+          fmt={fmt}
+        />
+        <FluxArrow
+          value={averages.BKe}
+          positiveDirection="left"
+          label="BKe"
+          semanticColor={LEC_COLORS.boundary}
+          fmt={fmt}
+          tooltip="Ke boundary flux (entering ∂Ke/∂t from right)"
+        />
 
-        {/* Row 4: Kz and Ke reservoirs */}
+        {/* ═══ Row 4: Generation terms entering from bottom ═══ */}
         <div />
-        <EnergyBox label="Kz" value={averages.Kz} color="#3b82f6" subtext="Zonal KE" fmt={fmt} />
-        <Arrow value={averages.Ck} direction="left" label="Ck" fmt={fmt} />
-        <EnergyBox label="Ke" value={averages.Ke} color="#f97316" subtext="Eddy KE" fmt={fmt} />
+        <FluxArrow
+          value={averages.Ge}
+          positiveDirection="up"
+          label="Ge"
+          semanticColor={LEC_COLORS.latentHeat}
+          fmt={fmt}
+          tooltip="Eddy APE generation (entering ∂Ae/∂t from bottom)"
+        />
+        <div />
+        {/* RKe placeholder - data not available */}
+        <div className="text-[9px] text-gray-300 h-9 flex items-center">(RKe)</div>
         <div />
       </div>
 
-      <div className="mt-3 space-y-0.5 text-xs text-gray-400 text-center">
-        <p>Reservoirs: ×10⁵ J m⁻² · Conversions: W m⁻²</p>
-        <p>
-          <span className="text-green-600">Green</span> = positive (forward) ·{" "}
-          <span className="text-red-500">Red</span> = negative (reverse)
-        </p>
-        <p className="text-gray-300">
-          Ck positive = Ke→Kz (barotropic dissipation); negative = Kz→Ke (cyclone growth)
-        </p>
-        <p className="text-gray-300">
-          Boundary fluxes (BAz, BAe, BKz, BKe) and generation (Gz, Ge) visible in Table view
+      {/* ═══ Legend ═══ */}
+      <div className="mt-4 space-y-1 text-xs text-gray-500 text-center">
+        <p className="font-medium">Arrows show positive flux direction</p>
+        <div className="flex flex-wrap justify-center gap-x-3 gap-y-0.5">
+          <span>
+            <span style={{ color: LEC_COLORS.baroclinic }}>●</span> Baroclinic (Ca, Ce)
+          </span>
+          <span>
+            <span style={{ color: LEC_COLORS.barotropic }}>●</span> Barotropic (Ck)
+          </span>
+          <span>
+            <span style={{ color: LEC_COLORS.latentHeat }}>●</span> Generation (Cz, Gz, Ge)
+          </span>
+          <span>
+            <span style={{ color: LEC_COLORS.boundary }}>●</span> Boundary (BA*, BK*)
+          </span>
+        </div>
+        <p className="text-gray-400">
+          Reservoirs: ×10⁵ J m⁻² · Fluxes: W m⁻²
         </p>
       </div>
     </div>
   );
 }
 
-// ── Arrow ──────────────────────────────────────────────────────────────────────
+// ── Flux Arrow ─────────────────────────────────────────────────────────────────
 
-function Arrow({
+/**
+ * Arrow component for LEC fluxes.
+ *
+ * The `positiveDirection` parameter defines which direction the arrow points
+ * when the flux value is positive. When the value is negative, the arrow
+ * reverses direction to indicate flow in the opposite sense.
+ *
+ * Color intensity scales with magnitude for visual emphasis.
+ */
+function FluxArrow({
   value,
-  direction,
+  positiveDirection,
   label,
+  semanticColor,
   fmt,
+  tooltip,
 }: {
   value: number;
-  direction: "right" | "down" | "left" | "up";
+  positiveDirection: "right" | "down" | "left" | "up";
   label: string;
+  semanticColor: string;
   fmt: (val: number, decimals?: number) => string;
+  tooltip?: string;
 }) {
   const isPositive = value >= 0;
-  const thickness = Math.min(3, Math.max(1, Math.abs(value) / 2));
-  const color = isPositive ? "#16a34a" : "#dc2626";
-  const symbols: Record<string, string> = {
-    right: isPositive ? "→" : "←",
-    left:  isPositive ? "←" : "→",
-    down:  isPositive ? "↓" : "↑",
-    up:    isPositive ? "↑" : "↓",
+  const magnitude = Math.abs(value);
+  
+  // Scale arrow size based on magnitude (1-4 range)
+  const thickness = Math.min(4, Math.max(1, magnitude / 1.5));
+  
+  // Determine actual arrow direction based on sign
+  const oppositeDir: Record<string, string> = {
+    right: "left",
+    left: "right",
+    up: "down",
+    down: "up",
   };
+  const actualDirection = isPositive ? positiveDirection : oppositeDir[positiveDirection];
+  
+  // Arrow symbols
+  const symbols: Record<string, string> = {
+    right: "→",
+    left: "←",
+    down: "↓",
+    up: "↑",
+  };
+  
+  // Dim color when value is very small
+  const opacity = magnitude < 0.1 ? 0.4 : magnitude < 0.5 ? 0.7 : 1;
+  const displayColor = semanticColor;
+  
+  const isVertical = actualDirection === "up" || actualDirection === "down";
+  
   return (
-    <div className="flex flex-col items-center justify-center text-xs">
-      <span className="font-medium text-gray-600">{label}</span>
-      <span style={{ color, fontWeight: "bold", fontSize: `${12 + thickness * 2}px` }}>
-        {symbols[direction]}
+    <div
+      className={`flex ${isVertical ? "flex-col" : "flex-row"} items-center justify-center text-xs gap-0.5`}
+      title={tooltip}
+      style={{ minWidth: isVertical ? "auto" : "40px", minHeight: isVertical ? "36px" : "auto" }}
+    >
+      <span className="font-medium text-gray-600 text-[10px]">{label}</span>
+      <span
+        style={{
+          color: displayColor,
+          fontWeight: "bold",
+          fontSize: `${10 + thickness * 2}px`,
+          opacity,
+        }}
+      >
+        {symbols[actualDirection]}
       </span>
-      <span style={{ color }}>{fmt(Math.abs(value))}</span>
+      <span style={{ color: displayColor, opacity }} className="text-[10px]">
+        {fmt(magnitude)}
+      </span>
     </div>
   );
 }
 
-// ── Energy reservoir box ───────────────────────────────────────────────────────
+// ── Tendency Box (Energy Reservoir) ────────────────────────────────────────────
 
-function EnergyBox({
+/**
+ * Box representing an energy tendency term (∂E/∂t).
+ * Shows the reservoir label, type description, and current value.
+ */
+function TendencyBox({
   label,
   value,
   color,
@@ -324,14 +542,14 @@ function EnergyBox({
 }) {
   return (
     <div
-      className="w-20 h-20 rounded-lg flex flex-col items-center justify-center border-2"
+      className="w-16 h-16 rounded-lg flex flex-col items-center justify-center border-2"
       style={{ borderColor: color, backgroundColor: `${color}15` }}
     >
-      <span className="text-xs text-gray-500">{subtext}</span>
-      <span className="font-bold text-lg" style={{ color }}>
+      <span className="text-[9px] text-gray-500 leading-tight">{subtext}</span>
+      <span className="font-bold text-sm leading-tight" style={{ color }}>
         {label}
       </span>
-      <span className="text-xs font-medium">{fmt(value)}</span>
+      <span className="text-[10px] font-medium leading-tight">{fmt(value)}</span>
     </div>
   );
 }
@@ -340,37 +558,37 @@ function EnergyBox({
 
 const TABLE_GROUPS: { header: string; terms: { key: LecTermKey; label: string; desc: string }[] }[] = [
   {
-    header: "Energy Reservoirs (×10⁵ J m⁻²)",
+    header: "Energy Tendencies (×10⁵ J m⁻²)",
     terms: [
-      { key: "Az",  label: "Az",  desc: "Zonal APE" },
-      { key: "Ae",  label: "Ae",  desc: "Eddy APE"  },
-      { key: "Kz",  label: "Kz",  desc: "Zonal KE"  },
-      { key: "Ke",  label: "Ke",  desc: "Eddy KE"   },
+      { key: "Az",  label: "∂Az/∂t",  desc: "Zonal APE tendency" },
+      { key: "Ae",  label: "∂Ae/∂t",  desc: "Eddy APE tendency"  },
+      { key: "Kz",  label: "∂Kz/∂t",  desc: "Zonal KE tendency"  },
+      { key: "Ke",  label: "∂Ke/∂t",  desc: "Eddy KE tendency"   },
     ],
   },
   {
     header: "Conversions (W m⁻²)",
     terms: [
-      { key: "Ca",  label: "Ca",  desc: "Az→Ae (baroclinic)"     },
-      { key: "Ce",  label: "Ce",  desc: "Ae→Ke (eddy growth)"    },
-      { key: "Ck",  label: "Ck",  desc: "Ke→Kz (+) / Kz→Ke (−)" },
-      { key: "Cz",  label: "Cz",  desc: "Az→Kz"                  },
+      { key: "Cz",  label: "Cz",  desc: "∂Az/∂t → ∂Kz/∂t"                  },
+      { key: "Ca",  label: "Ca",  desc: "∂Az/∂t → ∂Ae/∂t (baroclinic)"     },
+      { key: "Ce",  label: "Ce",  desc: "∂Ae/∂t → ∂Ke/∂t (baroclinic)"    },
+      { key: "Ck",  label: "Ck",  desc: "∂Ke/∂t → ∂Kz/∂t (barotropic)" },
     ],
   },
   {
     header: "Boundary Fluxes (W m⁻²)",
     terms: [
-      { key: "BAz", label: "BAz", desc: "Az flux through boundary" },
-      { key: "BAe", label: "BAe", desc: "Ae flux through boundary" },
-      { key: "BKz", label: "BKz", desc: "Kz flux through boundary" },
-      { key: "BKe", label: "BKe", desc: "Ke flux through boundary" },
+      { key: "BAz", label: "BAz", desc: "Entering ∂Az/∂t from left" },
+      { key: "BAe", label: "BAe", desc: "Entering ∂Ae/∂t from left" },
+      { key: "BKz", label: "BKz", desc: "Entering ∂Kz/∂t from right" },
+      { key: "BKe", label: "BKe", desc: "Entering ∂Ke/∂t from right" },
     ],
   },
   {
     header: "Generation (W m⁻²)",
     terms: [
-      { key: "Gz",  label: "Gz",  desc: "Zonal APE generation" },
-      { key: "Ge",  label: "Ge",  desc: "Eddy APE generation"  },
+      { key: "Gz",  label: "Gz",  desc: "Entering ∂Az/∂t from top" },
+      { key: "Ge",  label: "Ge",  desc: "Entering ∂Ae/∂t from bottom"  },
     ],
   },
 ];
@@ -481,7 +699,7 @@ function TableView({
         </tbody>
       </table>
       <p className="mt-2 text-xs text-gray-400 leading-tight">
-        Positive values = forward direction. Negative = reverse. Ck: positive = Ke→Kz, negative = Kz→Ke.
+        Positive values = flux in arrow direction (see Diagram). Negative = reverse direction.
         Blue = original 3-hourly timesteps used in averages.
       </p>
     </div>

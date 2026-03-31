@@ -111,8 +111,8 @@ export default function LECTimeSeries({
   const commonTooltip = (
     <Tooltip
       contentStyle={{ fontSize: 11 }}
-      labelFormatter={(h: number) => `Hour ${h}`}
-      formatter={(value: number) =>
+      labelFormatter={(h) => `Hour ${h}`}
+      formatter={(value) =>
         typeof value === "number" ? value.toFixed(3) : "N/A"
       }
     />
