@@ -76,6 +76,15 @@ page.tsx  (state owner)
         │   ├── CircleMarker × M  (selected track timesteps only)
         │   └── MapClickHandler
         └── Tooltip (Leaflet native)
+
+about/page.tsx  (standalone)
+├── Header (inline variant with nav links)
+└── Content sections
+    ├── Data Sources
+    ├── Preprocessing
+    ├── Methodology
+    ├── Limitations
+    └── References
 ```
 
 ## State management

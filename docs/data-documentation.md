@@ -1,19 +1,38 @@
 # Data Documentation
 
-## Source file
+## Source Data
 
-`data/raw/tracks_SAt_filtered_with_energetics.csv`
+### Primary Source: Zenodo Archive
+
+**DOI**: [10.5281/zenodo.18133432](https://doi.org/10.5281/zenodo.18133432)
+
+The canonical data source is the Zenodo archive containing complete cyclone tracks with energetics for the South Atlantic (1979–2020).
+
+**Downloaded to**: `data/raw/tracks_SAt_source.csv`
+
+### Processed Output
+
+**File**: `data/processed/tracks_south_atlantic_consolidated.csv`
 
 | Property | Value |
 |----------|-------|
-| Rows | 631 009 (individual track timesteps) |
-| Unique tracks | 6 789 |
+| Rows | 631,009 (individual track timesteps) |
+| Unique tracks | 6,789 |
 | Period | 1979-01-01 to 2021-01-07 |
-| Temporal resolution | Hourly |
 | Geographic coverage | South Atlantic (lat −74.9° to −16.0°, lon −84.3° to +179.9°) |
-| File size | ~66 MB |
+| File size | ~143 MB |
 
-## Data sources
+### Temporal Resolution
+
+| Data Type | Resolution | Notes |
+|-----------|------------|-------|
+| Track positions (lon, lat) | 1-hourly | 100% complete |
+| Vorticity (vor42) | 1-hourly | 100% complete |
+| LEC energetics | 3-hourly | ~33% of timesteps have data |
+
+**Important**: The ~67% "missing" energetics is **expected behaviour**. LEC diagnostics are computed at 3-hourly intervals, while track positions are recorded hourly.
+
+## Data Sources
 
 | What | Reference |
 |------|-----------|
@@ -25,33 +44,72 @@
 
 ## Columns
 
+### Identification and Position
+
 | Column | Type | Missing | Description |
 |--------|------|---------|-------------|
 | `track_id` | int64 | 0% | Cyclone identifier, format YYYYNNNN |
-| `date` | string | 0% | UTC datetime of the position snapshot |
-| `lon vor` | float64 | 0% | Longitude of the 400 hPa vorticity centre (degrees) |
-| `lat vor` | float64 | 0% | Latitude of the 400 hPa vorticity centre (degrees) |
+| `date` | datetime | 0% | UTC datetime of the position snapshot |
+| `lon` | float64 | 0% | Longitude of the cyclone centre (degrees) |
+| `lat` | float64 | 0% | Latitude of the cyclone centre (degrees) |
 | `vor42` | float64 | 0% | Relative vorticity at 400 hPa (×10⁻⁵ s⁻¹) |
+
+### Classification
+
+| Column | Type | Missing | Description |
+|--------|------|---------|-------------|
+| `region` | string | 0% | Genesis region code (ARG, LA-PLATA, SE-BR) |
+| `period` | string | 7.9% | Lifecycle phase from Cyclophaser |
+
+### LEC Energy Reservoirs
+
+| Column | Type | Missing | Description |
+|--------|------|---------|-------------|
+| `Az` | float64 | 66.7% | Zonal available potential energy (J m⁻²) |
+| `Ae` | float64 | 66.7% | Eddy available potential energy (J m⁻²) |
 | `Kz` | float64 | 66.7% | Zonal kinetic energy (J m⁻²) |
 | `Ke` | float64 | 66.7% | Eddy kinetic energy (J m⁻²) |
-| `Ck` | float64 | 66.7% | Kz → Ke conversion (W m⁻²) |
-| `Ca` | float64 | 66.7% | Available potential energy conversion (W m⁻²) |
-| `BAe` | float64 | 66.7% | Baroclinic generation of eddy APE (W m⁻²) |
-| `BKe` | float64 | 66.7% | Baroclinic generation of eddy KE (W m⁻²) |
-| `Ge` | float64 | 66.7% | Generation of eddy available potential energy (W m⁻²) |
 
-**Note on energetics columns:** The LEC diagnostics are available at approximately every
-3rd timestep (~33% coverage). This is a systematic pattern in the source dataset, not
-random missingness. The application handles this by omitting null keys from the per-timestep
-JSON — a timestep without LEC data shows the note "LEC diagnostics not available at this
-timestep."
+### LEC Conversion Terms
 
-## Derived artefacts
+| Column | Type | Missing | Description |
+|--------|------|---------|-------------|
+| `Cz` | float64 | 66.7% | Az → Kz conversion (W m⁻²) |
+| `Ca` | float64 | 66.7% | Az → Ae conversion (W m⁻²) |
+| `Ck` | float64 | 66.7% | Ke → Kz conversion (W m⁻²) |
+| `Ce` | float64 | 66.7% | Ae → Ke conversion (W m⁻²) |
+
+### LEC Boundary Terms
+
+| Column | Type | Missing | Description |
+|--------|------|---------|-------------|
+| `BAz` | float64 | 66.7% | Boundary flux of Az (W m⁻²) |
+| `BAe` | float64 | 66.7% | Boundary flux of Ae (W m⁻²) |
+| `BKz` | float64 | 66.7% | Boundary flux of Kz (W m⁻²) |
+| `BKe` | float64 | 66.7% | Boundary flux of Ke (W m⁻²) |
+| `BΦZ` | float64 | 66.7% | Boundary geopotential flux, zonal (W m⁻²) |
+| `BΦE` | float64 | 66.7% | Boundary geopotential flux, eddy (W m⁻²) |
+
+### LEC Generation and Residual Terms
+
+| Column | Type | Missing | Description |
+|--------|------|---------|-------------|
+| `Gz` | float64 | 66.7% | Generation of zonal APE (W m⁻²) |
+| `Ge` | float64 | 66.7% | Generation of eddy APE (W m⁻²) |
+| `dAzdt` | float64 | 66.7% | Time tendency of Az (W m⁻²) |
+| `dAedt` | float64 | 66.7% | Time tendency of Ae (W m⁻²) |
+| `dKzdt` | float64 | 66.7% | Time tendency of Kz (W m⁻²) |
+| `dKedt` | float64 | 66.7% | Time tendency of Ke (W m⁻²) |
+| `RGz` | float64 | 66.7% | Residual generation, zonal (W m⁻²) |
+| `RGe` | float64 | 66.7% | Residual generation, eddy (W m⁻²) |
+| `RKz` | float64 | 66.7% | Residual kinetic, zonal (W m⁻²) |
+| `RKe` | float64 | 66.7% | Residual kinetic, eddy (W m⁻²) |
+
+## Derived Web Artefacts
 
 ### `site/public/data/summary.json`
 
-Generated by `scripts/preprocess_data.py`. One entry per track (6 789 entries, ~10 MB raw,
-~2.5 MB gzip).
+Generated by `scripts/preprocess_data.py`. One entry per track (6,789 entries, ~10 MB raw, ~2.5 MB gzip).
 
 Per-track fields:
 
@@ -64,27 +122,25 @@ Per-track fields:
 | `duration_h` | Track duration in hours |
 | `genesis_lat`, `genesis_lon` | First timestep position |
 | `lysis_lat`, `lysis_lon` | Last timestep position |
-| `genesis_region` | Named region (Gramcianinov et al. 2019 framework) |
+| `genesis_region` | Named region (mapped from code) |
 | `max_vor42` | Maximum vor42 across all track timesteps (intensity measure) |
-| `quantile` | Intensity quantile label versus all 6 789 tracks |
+| `quantile` | Intensity quantile label versus all 6,789 tracks |
 | `coords` | Downsampled track line as `[lon, lat]` pairs (max 120 points) |
 
 ### `site/public/data/details/{year}.json`
 
-One file per year (43 files, ~1.8 MB each). Loaded on demand when a track is clicked.
-Contains full timestep data for all tracks in that year.
+One file per year (43 files, ~2 MB each). Loaded on demand when a track is clicked. Contains full timestep data for all tracks in that year.
 
-## Intensity measure: vor42
+## Intensity Measure: vor42
 
-`vor42` (relative vorticity at 400 hPa, ×10⁻⁵ s⁻¹) was chosen as the intensity proxy
-because:
+`vor42` (relative vorticity at 400 hPa, ×10⁻⁵ s⁻¹) is used as the intensity proxy because:
 - It is 100% complete (no missing values)
 - It is a physically meaningful intensity indicator for extratropical cyclones
-- It was the only intensity-related variable available in the raw dataset
+- Higher values indicate more intense cyclonic circulation
 
 The intensity of each track is characterised by its **maximum vor42** across all timesteps.
 
-### Quantile thresholds (2026-03-30 preprocessing run)
+### Quantile Thresholds (current data)
 
 | Percentile | vor42 (×10⁻⁵ s⁻¹) |
 |------------|-------------------|
@@ -94,27 +150,24 @@ The intensity of each track is characterised by its **maximum vor42** across all
 | 90th | 10.353 |
 | 95th | 11.492 |
 
-## Genesis region assignment
+## Genesis Region Classification
 
-Derived from the genesis lat/lon (first timestep of each track) using geographic bounding
-boxes that approximate the cyclogenesis hotspots identified in:
+Genesis region is determined from the first timestep position of each track. The source data uses codes that map to display names:
 
+| Code | Display Name | Description |
+|------|--------------|-------------|
+| ARG | Argentina / Patagonia | Southern Argentina and Patagonian coast |
+| LA-PLATA | SE South America | La Plata basin and Río de la Plata region |
+| SE-BR | SE Brazil Coast | Coastal baroclinic zone off southeastern Brazil |
+
+Reference:
 > Gramcianinov, C. B., Hodges, K. I., & Camargo, R. D. (2019).
 > The properties and genesis environments of South Atlantic cyclones.
 > *Climate Dynamics*, 53(7), 4115–4140. https://doi.org/10.1007/s00382-019-04778-7
 
-| Region | Approximate bounding box |
-|--------|--------------------------|
-| SE South America | lat ∈ [−45, −25], lon ∈ [−70, −48] |
-| Argentina / Patagonia | lat < −45, lon ∈ [−75, −50] |
-| SE Brazil Coast | lat ∈ [−35, −20], lon ∈ [−55, −35] |
-| Subtropical South Atlantic | lat ∈ [−35, −20], lon > −35 |
-| Open South Atlantic | mid-latitude open ocean (everything else) |
-| Indian Ocean / Other | lon > +20 |
+## Lifecycle Phase Labels
 
-## Lifecycle phase labels
-
-Phase labels in the web app follow the Cyclophaser convention defined in:
+Phase labels in the consolidated CSV follow the Cyclophaser methodology:
 
 > de Souza, D. C., da Dias, P. L. S., Gramcianinov, C. B., & de Camargo, R. (2025).
 > Cyclophaser: A Python package for detecting extratropical cyclone life cycles.
@@ -129,14 +182,15 @@ Results from applying Cyclophaser to this dataset are presented in:
 > *International Journal of Climatology*, 44(10), 3568–3588.
 > https://doi.org/10.1002/joc.8566
 
-**Important:** The phase labels in the processed JSON are derived heuristically in
-`scripts/preprocess_data.py` from the vor42 time series, as a lightweight approximation
-of the Cyclophaser lifecycle detection. For rigorous analysis, use Cyclophaser directly.
+| Phase | Description |
+|-------|-------------|
+| incipient | Initial development phase |
+| intensification | Growth phase (vor42 increasing) |
+| mature | Maximum intensity phase (vor42 near peak) |
+| decay | Weakening phase (vor42 decreasing) |
+| intensification 2 | Secondary intensification (some cyclones) |
+| mature 2 | Secondary maximum (some cyclones) |
+| decay 2 | Secondary decay (some cyclones) |
+| residual | Post-decay remnant activity |
 
-| Phase | Heuristic definition |
-|-------|---------------------|
-| incipient | First 2 timesteps |
-| intensification | vor42 increasing, below 85% of track maximum |
-| mature | vor42 ≥ 85% of track maximum |
-| decay | vor42 decreasing, below 85% of track maximum after peak |
-| dissipation | Last 2 timesteps |
+**Note**: The ~7.9% missing values in the `period` column occur at timesteps where the phase classification was not computed (e.g., very short tracks or edge cases).

@@ -1,0 +1,85 @@
+======================================================================
+Validation Report
+======================================================================
+
+Output file: /Users/danilocoutodesouza/Documents/Programs_and_scripts/cyclone_monitor_south_atlantic/data/processed/tracks_south_atlantic_consolidated.csv
+Generated: 2026-03-30 21:57:42
+
+──────────────────────────────────────────────────────────────────────
+Dataset Summary
+──────────────────────────────────────────────────────────────────────
+  Total rows:      631,009
+  Unique tracks:   6,789
+  Date range:      1979-01-01 to 2021-01-07
+  Duplicate rows:  0
+
+──────────────────────────────────────────────────────────────────────
+Genesis Region Distribution
+──────────────────────────────────────────────────────────────────────
+  ARG            :  348,628 rows ( 55.2%)
+  LA-PLATA       :  149,497 rows ( 23.7%)
+  SE-BR          :  132,884 rows ( 21.1%)
+
+──────────────────────────────────────────────────────────────────────
+Lifecycle Phase Distribution
+──────────────────────────────────────────────────────────────────────
+  decay               :  228,336 rows ( 36.2%)
+  intensification     :  195,620 rows ( 31.0%)
+  mature              :   51,281 rows (  8.1%)
+  incipient           :   42,663 rows (  6.8%)
+  decay 2             :   30,600 rows (  4.8%)
+  intensification 2   :   15,009 rows (  2.4%)
+  residual            :   14,234 rows (  2.3%)
+  mature 2            :    3,175 rows (  0.5%)
+  incipient 2         :       22 rows (  0.0%)
+
+──────────────────────────────────────────────────────────────────────
+LEC Energetics Coverage
+──────────────────────────────────────────────────────────────────────
+  (Expected ~33% — energetics are 3-hourly, tracks are 1-hourly)
+
+  Az    : ██████░░░░░░░░░░░░░░  33.3%
+  Ae    : ██████░░░░░░░░░░░░░░  33.3%
+  Kz    : ██████░░░░░░░░░░░░░░  33.3%
+  Ke    : ██████░░░░░░░░░░░░░░  33.3%
+  Ca    : ██████░░░░░░░░░░░░░░  33.3%
+  Ck    : ██████░░░░░░░░░░░░░░  33.3%
+  Ce    : ██████░░░░░░░░░░░░░░  33.3%
+  Cz    : ██████░░░░░░░░░░░░░░  33.3%
+
+──────────────────────────────────────────────────────────────────────
+Column List
+──────────────────────────────────────────────────────────────────────
+   1. track_id                       int64           (  0.0% null)
+   2. date                           datetime64[ns]  (  0.0% null)
+   3. lon                            float64         (  0.0% null)
+   4. lat                            float64         (  0.0% null)
+   5. vor42                          float64         (  0.0% null)
+   6. region                         object          (  0.0% null)
+   7. period                         object          (  7.9% null)
+   8. Az                             float64         ( 66.7% null)
+   9. Ae                             float64         ( 66.7% null)
+  10. Kz                             float64         ( 66.7% null)
+  11. Ke                             float64         ( 66.7% null)
+  12. Cz                             float64         ( 66.7% null)
+  13. Ca                             float64         ( 66.7% null)
+  14. Ck                             float64         ( 66.7% null)
+  15. Ce                             float64         ( 66.7% null)
+  16. BAz                            float64         ( 66.7% null)
+  17. BAe                            float64         ( 66.7% null)
+  18. BKz                            float64         ( 66.7% null)
+  19. BKe                            float64         ( 66.7% null)
+  20. BΦZ                            float64         ( 66.7% null)
+  21. BΦE                            float64         ( 66.7% null)
+  22. Gz                             float64         ( 66.7% null)
+  23. Ge                             float64         ( 66.7% null)
+  24. dAzdt                          float64         ( 66.7% null)
+  25. dAedt                          float64         ( 66.7% null)
+  26. dKzdt                          float64         ( 66.7% null)
+  27. dKedt                          float64         ( 66.7% null)
+  28. RGz                            float64         ( 66.7% null)
+  29. RGe                            float64         ( 66.7% null)
+  30. RKz                            float64         ( 66.7% null)
+  31. RKe                            float64         ( 66.7% null)
+
+======================================================================

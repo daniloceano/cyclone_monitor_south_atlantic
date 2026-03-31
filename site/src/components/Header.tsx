@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 interface HeaderProps {
   totalTracks: number;
   filteredCount: number;
@@ -47,6 +49,14 @@ export default function Header({ totalTracks, filteredCount, onLogout }: HeaderP
       </div>
 
       <div className="flex-1" />
+
+      {/* About link */}
+      <Link
+        href="/about"
+        className="hidden sm:block text-xs text-gray-500 hover:text-blue-600 transition px-2 py-1 rounded hover:bg-gray-50"
+      >
+        About
+      </Link>
 
       {/* Data source badge */}
       <a

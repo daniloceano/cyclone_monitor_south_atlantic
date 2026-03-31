@@ -4,13 +4,85 @@ Interactive web-based monitor for extratropical cyclone tracks in the Southweste
 
 ## Overview
 
-This tool visualises 6 789 cyclone tracks on a dynamic Leaflet map, allowing researchers to filter systems by year, month, and genesis region; inspect individual lifecycles; and explore per-timestep diagnostics including Lorenz Energy Cycle (LEC) parameters.
+This tool visualises 6,789 cyclone tracks on a dynamic Leaflet map, allowing researchers to filter systems by year, month, and genesis region; inspect individual lifecycles; and explore per-timestep diagnostics including Lorenz Energy Cycle (LEC) parameters.
+
+The site includes an **About** page (`/about`) with detailed documentation of data sources, preprocessing methods, scientific methodology, and complete references.
 
 Built as a private scientific demonstration for the IAG-USP / Petrobras–CENPES cooperation.
 
 ---
 
-## Data sources
+## Quick Start
+
+```bash
+# 1. Clone and enter the repository
+cd cyclone_monitor_south_atlantic
+
+# 2. Run the data pipeline (downloads ~180 MB, takes ~2 min)
+python3 scripts/data/run_pipeline.py
+
+# 3. Generate web app JSON artefacts
+python3 scripts/preprocess_data.py
+
+# 4. Install web dependencies and run locally
+cd site
+npm install
+npm run dev
+# Open http://localhost:3000
+```
+
+---
+
+## Data Pipeline
+
+The data pipeline downloads and processes cyclone track data with full energetics:
+
+```
+scripts/data/
+├── run_pipeline.py         ← Orchestrator (run this)
+├── download_source_data.py ← Download from Zenodo
+└── preprocess_data.py      ← Standardize columns, validate
+
+data/
+├── raw/
+│   └── tracks_SAt_source.csv           ← Downloaded (~180 MB, gitignored)
+└── processed/
+    └── tracks_south_atlantic_consolidated.csv  ← Final product (~143 MB)
+```
+
+### Running the Pipeline
+
+```bash
+# Full pipeline (download + preprocess)
+python3 scripts/data/run_pipeline.py
+
+# Or individual steps:
+python3 scripts/data/download_source_data.py   # Download from Zenodo
+python3 scripts/data/preprocess_data.py        # Process and validate
+```
+
+### Pipeline Output
+
+The consolidated CSV contains **631,009 timesteps** across **6,789 cyclones** with:
+
+| Column | Description | Temporal Resolution |
+|--------|-------------|---------------------|
+| `track_id` | Cyclone identifier (YYYYNNNN) | — |
+| `date` | UTC timestamp | 1-hourly |
+| `lon`, `lat` | Position (degrees) | 1-hourly |
+| `vor42` | Relative vorticity (×10⁻⁵ s⁻¹) | 1-hourly |
+| `region` | Genesis region (ARG, LA-PLATA, SE-BR) | — |
+| `period` | Lifecycle phase (incipient, intensification, mature, decay) | 1-hourly |
+| `Az`, `Ae`, `Kz`, `Ke` | LEC energy reservoirs (J m⁻²) | 3-hourly |
+| `Ca`, `Ck`, `Ce`, `Cz` | LEC conversion terms (W m⁻²) | 3-hourly |
+| `BAz`, `BAe`, `BKz`, `BKe` | LEC boundary terms (W m⁻²) | 3-hourly |
+| `Gz`, `Ge` | LEC generation terms (W m⁻²) | 3-hourly |
+
+**Note:** LEC energetics are available at 3-hourly intervals (~33% of timesteps). This is expected behaviour; the remaining timesteps have NaN for energetics columns.
+
+---
+
+## Data Sources
 
 | Dataset | Reference |
 |---------|-----------|
@@ -35,26 +107,32 @@ Built as a private scientific demonstration for the IAG-USP / Petrobras–CENPES
 
 ---
 
-## Repository structure
+## Repository Structure
 
 ```
 cyclone_monitor_south_atlantic/
 ├── data/
-│   └── raw/
-│       └── tracks_SAt_filtered_with_energetics.csv   ← source data (not committed)
+│   ├── raw/                              ← Source data (gitignored)
+│   │   └── tracks_SAt_source.csv
+│   └── processed/                        ← Generated products
+│       └── tracks_south_atlantic_consolidated.csv
 ├── scripts/
-│   └── preprocess_data.py                            ← CSV → JSON pipeline (run from here)
-├── site/                                             ← Next.js web application
+│   ├── data/                             ← Data pipeline
+│   │   ├── run_pipeline.py               ← Main orchestrator
+│   │   ├── download_source_data.py       ← Zenodo download
+│   │   └── preprocess_data.py            ← CSV processing
+│   └── preprocess_data.py                ← CSV → JSON for web app
+├── site/                                 ← Next.js web application
 │   ├── public/
 │   │   └── data/
-│   │       ├── summary.json                          ← all tracks + simplified coords (~10 MB)
-│   │       └── details/{year}.json                   ← full timestep data, loaded on demand
+│   │       ├── summary.json              ← Track metadata (~10 MB)
+│   │       └── details/{year}.json       ← Per-timestep data
 │   ├── src/
-│   │   ├── app/                                      ← pages, layouts, API routes
-│   │   ├── components/                               ← React components
-│   │   ├── lib/                                      ← data loading, filters, utils
-│   │   └── types/                                    ← TypeScript types
-│   ├── middleware.ts                                  ← auth guard
+│   │   ├── app/                          ← Pages, layouts, API routes
+│   │   ├── components/                   ← React components
+│   │   ├── lib/                          ← Data loading, filters, utils
+│   │   └── types/                        ← TypeScript types
+│   ├── middleware.ts                     ← Auth guard
 │   ├── package.json
 │   └── .env.example
 ├── docs/
@@ -73,17 +151,17 @@ cyclone_monitor_south_atlantic/
 
 - Python 3.9+ with `pandas` and `numpy`
 - Node.js 18+ (install via [nvm](https://github.com/nvm-sh/nvm) if needed)
+- `curl` or `wget` for data downloads
 
-### 2. Place the source data
+### 2. Run the data pipeline
 
 ```bash
-# The CSV must be at:
-data/raw/tracks_SAt_filtered_with_energetics.csv
+python3 scripts/data/run_pipeline.py
 ```
 
-### 3. Run the preprocessing pipeline
+This downloads ~180 MB from Zenodo and generates the consolidated CSV (~143 MB).
 
-Run from the **project root** (not from `site/`):
+### 3. Generate web app JSON
 
 ```bash
 python3 scripts/preprocess_data.py
@@ -91,7 +169,7 @@ python3 scripts/preprocess_data.py
 
 This generates:
 - `site/public/data/summary.json` (~10 MB) — all track metadata and simplified line coordinates
-- `site/public/data/details/{year}.json` (~1.8 MB each, 43 files) — full per-timestep data
+- `site/public/data/details/{year}.json` (~2 MB each, 43 files) — full per-timestep data
 
 ### 4. Install dependencies
 
@@ -120,7 +198,7 @@ npm run dev
 
 ---
 
-## Password protection
+## Password Protection
 
 Authentication uses a simple httpOnly cookie checked by Next.js middleware.
 
@@ -135,10 +213,9 @@ See [docs/deployment.md](docs/deployment.md) for Vercel configuration.
 
 ---
 
-## Vercel deployment
+## Vercel Deployment
 
-The Next.js app lives in `site/`. When importing the project in Vercel, set
-**Root Directory** to `site`. Then add `SITE_PASSWORD` in environment variables.
+The Next.js app lives in `site/`. When importing the project in Vercel, set **Root Directory** to `site`. Then add `SITE_PASSWORD` in environment variables.
 
 Full instructions: [docs/deployment.md](docs/deployment.md)
 
@@ -151,19 +228,19 @@ Full instructions: [docs/deployment.md](docs/deployment.md)
 | [docs/data-documentation.md](docs/data-documentation.md) | CSV structure, derived artefacts, region and phase definitions |
 | [docs/architecture.md](docs/architecture.md) | Component tree, state, performance rationale |
 | [docs/deployment.md](docs/deployment.md) | Vercel deploy steps, environment variables |
+| Site `/about` page | Data sources, methodology, references (visible after login) |
 
 ---
 
-## Current limitations
+## Current Limitations
 
 - The 10 MB `summary.json` is loaded on every initial page visit (~2.5 MB gzip over CDN).
 - Static files under `site/public/data/` are publicly accessible by direct URL regardless of the password cookie — this is a known constraint of Vercel static hosting.
-- Lifecycle phases (incipient/intensification/mature/decay/dissipation) are derived heuristically from the vor42 time series. For rigorous lifecycle analysis, use [Cyclophaser](https://github.com/daniloceano/CycloPhaser) directly.
-- Genesis region bounding boxes are approximations of the hotspots in Gramcianinov et al. (2019).
+- LEC energetics are only available at 3-hourly intervals (~33% of timesteps have energetics data).
+- Genesis region labels use short codes (ARG, LA-PLATA, SE-BR) that are mapped to display names in the web app.
 
 ## Roadmap
 
-- [ ] Integrate Cyclophaser phase labels directly from pre-computed per-track phase files
 - [ ] Statistics dashboard (seasonal climatology, frequency maps)
 - [ ] Export selected track as GeoJSON or CSV
 - [ ] Intensity colormap on tracks (gradient from incipient to dissipation)

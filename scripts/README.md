@@ -1,158 +1,136 @@
 # Scripts Directory
 
-This directory contains all data processing, transformation, and utility scripts for the South Atlantic Cyclone Monitor.
+Data processing and transformation scripts for the South Atlantic Cyclone Monitor.
 
-## 🎯 Purpose
-
-Scripts in this directory handle:
-- Data ingestion and validation
-- Format conversion (CSV → GeoJSON, etc.)
-- Metadata extraction and indexing
-- Statistical computations
-- Dataset generation for the web application
-
-## 📁 Planned Structure
+## 📁 Structure
 
 ```
 scripts/
-├── ingest/                 # Data ingestion and validation
-│   ├── validate_tracks.py  # Check CSV integrity
-│   └── import_data.py      # Move data to proper locations
-├── transform/              # Data transformation
-│   ├── csv_to_geojson.py   # Convert tracks to GeoJSON
-│   ├── compute_metadata.py # Extract track statistics
-│   └── generate_index.py   # Create searchable indices
-├── analysis/               # Analytical computations
-│   ├── track_statistics.py # Compute climatologies
-│   └── energetics.py       # Process energy cycle data
-├── utils/                  # Shared utilities
-│   ├── io.py               # File I/O helpers
-│   ├── validators.py       # Data validation functions
-│   └── config.py           # Configuration management
-└── README.md              # This file
+├── data/                       ← Data pipeline (download, preprocess)
+│   ├── run_pipeline.py         ← Main orchestrator (start here)
+│   ├── download_source_data.py ← Download from Zenodo
+│   └── preprocess_data.py      ← Standardize and validate CSV
+├── preprocess_data.py          ← CSV → JSON for web app
+└── README.md
 ```
 
-## 🚀 Current Status
+## 🚀 Quick Start
 
-**Phase**: Not yet implemented
+### 1. Run the Data Pipeline
 
-This directory is prepared for future development. Scripts will be added as the data pipeline is designed.
+```bash
+# Full pipeline: download + preprocess
+python3 scripts/data/run_pipeline.py
 
-## 🔧 Development Guidelines
-
-### Script Organization
-
-Each script should:
-- Have a single, well-defined purpose
-- Accept inputs via command-line arguments or configuration files
-- Log operations clearly (use Python's `logging` module)
-- Handle errors gracefully
-- Document inputs, outputs, and usage
-
-### Example Script Template
-
-```python
-#!/usr/bin/env python3
-"""
-Script: process_tracks.py
-Purpose: Convert cyclone track CSV to GeoJSON format
-Author: [Your name]
-Date: YYYY-MM-DD
-"""
-
-import argparse
-import logging
-from pathlib import Path
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-
-def main(input_file: Path, output_dir: Path):
-    """Main processing function."""
-    logging.info(f"Processing {input_file}")
-    # Processing logic here
-    logging.info(f"Output saved to {output_dir}")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process cyclone tracks")
-    parser.add_argument("input", type=Path, help="Input CSV file")
-    parser.add_argument("-o", "--output", type=Path, default=Path("data/processed"),
-                        help="Output directory")
-    args = parser.parse_args()
-    
-    main(args.input, args.output)
+# Skip download (use existing source file)
+python3 scripts/data/run_pipeline.py --skip-download
 ```
 
-### Naming Conventions
+**Output**: `data/processed/tracks_south_atlantic_consolidated.csv` (~143 MB)
 
-- **Python scripts**: `lowercase_with_underscores.py`
-- **Shell scripts**: `lowercase-with-dashes.sh`
-- **Utilities**: Prefix with `util_` or place in `utils/` subdirectory
+### 2. Generate Web App JSON
 
-### Dependencies
-
-When scripts require Python packages:
-1. Document in a `requirements.txt` at repository root
-2. Use virtual environments for isolation
-3. Pin versions for reproducibility
-
-Example `requirements.txt`:
-```
-pandas>=2.0.0
-geopandas>=0.14.0
-numpy>=1.24.0
+```bash
+python3 scripts/preprocess_data.py
 ```
 
-## 🔄 Typical Workflow
+**Output**:
+- `site/public/data/summary.json` (~10 MB)
+- `site/public/data/details/{year}.json` (43 files, ~2 MB each)
 
-Future data processing pipeline:
+## 📋 Script Details
 
-1. **Validation**: `ingest/validate_tracks.py` checks CSV integrity
-2. **Transformation**: `transform/csv_to_geojson.py` converts to web format
-3. **Metadata**: `transform/compute_metadata.py` extracts track info
-4. **Analysis**: `analysis/track_statistics.py` computes climatologies
-5. **Indexing**: `transform/generate_index.py` creates search indices
+### `scripts/data/run_pipeline.py`
 
-## 📊 Input/Output Conventions
+**Purpose**: Orchestrate the complete data pipeline
 
-- **Inputs**: Read from `data/raw/` or accept file paths via CLI arguments
-- **Outputs**: Write to `data/processed/` with clear subdirectory structure
-- **Logs**: Output to `logs/` directory (gitignored)
-- **Configurations**: Store in `config/` directory or `.env` file
+**Options**:
+- `--force` — Force re-download even if source file exists
+- `--skip-download` — Skip download step (use existing source file)
 
-## 🧪 Testing
+**Steps**:
+1. Download source data from Zenodo
+2. Preprocess and validate
+3. Generate consolidated CSV
 
-Scripts should include:
-- Input validation
-- Error handling for common issues
-- Sample test data in `tests/fixtures/`
-- Unit tests where applicable
+### `scripts/data/download_source_data.py`
 
-## 📝 Documentation
+**Purpose**: Download cyclone track data from Zenodo
 
-Each script should have:
-- Docstring explaining purpose and usage
-- Example command-line invocation in comments or `--help`
-- Input/output format specifications
+**Source**: DOI [10.5281/zenodo.18133432](https://doi.org/10.5281/zenodo.18133432)
 
-## 🔗 Integration with Web App
+**Output**: `data/raw/tracks_SAt_source.csv` (~180 MB)
 
-Scripts will generate web-ready data:
-- **GeoJSON**: For Leaflet map rendering
-- **JSON metadata**: For filtering and search
-- **Statistics**: For dashboard displays
+**Requirements**: `curl` or `wget` (or Python `requests`/`tqdm`)
 
-## ⚡ Performance Considerations
+### `scripts/data/preprocess_data.py`
 
-For large datasets:
-- Use chunked processing (pandas `chunksize`)
-- Implement progress bars (`tqdm`)
-- Cache intermediate results
-- Parallelize where appropriate (`multiprocessing`, `dask`)
+**Purpose**: Standardize and validate source CSV
+
+**Processing**:
+- Rename columns (e.g., `lon vor` → `lon`)
+- Drop geometry column
+- Parse dates
+- Validate track_id integrity
+- Generate validation report
+
+**Output**:
+- `data/processed/tracks_south_atlantic_consolidated.csv`
+- `data/processed/tracks_south_atlantic_consolidated.txt` (validation report)
+
+### `scripts/preprocess_data.py`
+
+**Purpose**: Convert consolidated CSV to web-optimized JSON
+
+**Input**: `data/processed/tracks_south_atlantic_consolidated.csv`
+
+**Output**:
+- `site/public/data/summary.json` — Track metadata + simplified coords
+- `site/public/data/details/{year}.json` — Full per-timestep data by year
+
+**Processing**:
+- Compute intensity quantiles
+- Map region codes to display names
+- Downsample track coordinates (max 120 points)
+- Extract per-timestep energetics
+
+## 📊 Data Flow
+
+```
+Zenodo (DOI: 10.5281/zenodo.18133432)
+        │
+        ↓  download_source_data.py
+        │
+data/raw/tracks_SAt_source.csv (180 MB)
+        │
+        ↓  preprocess_data.py (scripts/data/)
+        │
+data/processed/tracks_south_atlantic_consolidated.csv (143 MB)
+        │
+        ↓  preprocess_data.py (scripts/)
+        │
+site/public/data/summary.json + details/{year}.json
+        │
+        ↓
+    Web Application
+```
+
+## 🔧 Dependencies
+
+**Python 3.9+** with:
+- `pandas`
+- `numpy`
+
+**System tools**:
+- `curl` or `wget` (for download)
+
+## 📝 Notes
+
+- LEC energetics are 3-hourly; track positions are 1-hourly
+- ~67% of timesteps have NaN for energetics (expected)
+- Genesis regions use pre-computed codes (ARG, LA-PLATA, SE-BR)
+- Lifecycle phases are from Cyclophaser, not heuristic computation
 
 ## 📧 Questions?
 
-For scripting conventions or pipeline design, refer to the main repository documentation.
+See main repository README or docs/data-documentation.md.
