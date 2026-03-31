@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { TrackSummary, Timestep, QuantileThresholds, PHASE_COLORS, PHASE_LABELS } from "@/types/cyclone";
 import {
   formatDatetime,
@@ -9,6 +10,11 @@ import {
   formatDuration,
   monthName,
 } from "@/lib/utils";
+import dynamic from "next/dynamic";
+
+// Dynamic imports for chart components (client-side only, no SSR)
+const LECTimeSeries = dynamic(() => import("./LECTimeSeries"), { ssr: false });
+const LECBoxDiagram = dynamic(() => import("./LECBoxDiagram"), { ssr: false });
 
 interface TrackDetailPanelProps {
   track: TrackSummary;
@@ -32,6 +38,8 @@ export default function TrackDetailPanel({
   quantileThresholds: _qt,
 }: TrackDetailPanelProps) {
   const trackIdStr = String(track.id);
+  const [showLECCharts, setShowLECCharts] = useState(false);
+  const [lecTab, setLecTab] = useState<"timeseries" | "boxdiagram">("timeseries");
 
   // Count timesteps that carry LEC data
   const lecCount = timesteps?.filter((t) => t.Kz !== undefined).length ?? 0;
@@ -83,7 +91,7 @@ export default function TrackDetailPanel({
             highlight={track.quantile === "top 5%" || track.quantile === "top 10%"}
           />
           <p className="text-xs text-gray-400 mt-1 leading-tight">
-            vor42 = 400 hPa relative vorticity. Ranked against all 6 789 tracks.
+            vor42 = filtered and normalized relative vorticity. Ranked against all 6 789 tracks.
           </p>
         </div>
 
@@ -176,6 +184,65 @@ export default function TrackDetailPanel({
               </p>
             )}
           </>
+        )}
+
+        {/* ── LEC Charts Section ─────────────────────────────────────────── */}
+        {timesteps && lecCount > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowLECCharts(!showLECCharts)}
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-blue-100 transition"
+            >
+              <span className="text-xs font-semibold text-blue-700">
+                📊 Lorenz Energy Cycle Charts
+              </span>
+              <span className="text-blue-500 text-xs">
+                {showLECCharts ? "▲ Hide" : "▼ Show"}
+              </span>
+            </button>
+            
+            {showLECCharts && (
+              <div className="px-3 pb-3 space-y-3">
+                {/* Tab selector */}
+                <div className="flex gap-1 border-b border-blue-200 pb-2">
+                  <button
+                    onClick={() => setLecTab("timeseries")}
+                    className={`px-2 py-1 text-xs rounded-t transition ${
+                      lecTab === "timeseries"
+                        ? "bg-white text-blue-700 font-medium border border-b-white border-blue-200 -mb-[1px]"
+                        : "text-blue-500 hover:text-blue-700"
+                    }`}
+                  >
+                    Time Series
+                  </button>
+                  <button
+                    onClick={() => setLecTab("boxdiagram")}
+                    className={`px-2 py-1 text-xs rounded-t transition ${
+                      lecTab === "boxdiagram"
+                        ? "bg-white text-blue-700 font-medium border border-b-white border-blue-200 -mb-[1px]"
+                        : "text-blue-500 hover:text-blue-700"
+                    }`}
+                  >
+                    Energy Box Diagram
+                  </button>
+                </div>
+                
+                {/* Chart content */}
+                <div className="bg-white rounded-lg p-2 border border-blue-100">
+                  {lecTab === "timeseries" ? (
+                    <LECTimeSeries timesteps={timesteps} />
+                  ) : (
+                    <LECBoxDiagram timesteps={timesteps} />
+                  )}
+                </div>
+                
+                <p className="text-xs text-blue-600 leading-tight">
+                  LEC data from De Souza et al. (2025). Original 3-hourly resolution 
+                  interpolated to 1-hourly. See About page for methodology.
+                </p>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ── Selected timestep detail ──────────────────────────────────── */}

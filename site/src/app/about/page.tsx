@@ -84,11 +84,20 @@ export default function AboutPage() {
 
               <DataSourceCard
                 title="Lorenz Energy Cycle (LEC) Diagnostics"
-                description="Semi-Lagrangian energetics computed for each cyclone following the system's center. Contains 24 terms including energy reservoirs (Az, Ae, Kz, Ke), conversion terms (Ca, Ck, Ce, Cz), boundary fluxes, generation terms, and residuals."
+                description="Semi-Lagrangian energetics computed for each cyclone following the system's center. Contains energy reservoirs (Az, Ae, Kz, Ke), conversion terms (Ca, Ck, Ce, Cz), boundary fluxes, and generation terms. LEC climatology for the region is documented in a dedicated study."
+                citation="De Souza, D. C., Silva Dias, P. L. D., Gramcianinov, C. B., & Camargo, R. (2025). Lorenz Energy Cycle Climatology for the Southwestern Atlantic Cyclones. Climate Dynamics, 63(11), 1–26."
+                doi="10.1007/s00382-024-07555-z"
+                doiUrl="https://doi.org/10.1007/s00382-024-07555-z"
+                role="LEC methodology and climatology reference"
+              />
+
+              <DataSourceCard
+                title="LEC Data Archive"
+                description="Dataset containing the semi-Lagrangian LEC diagnostics for all 6,789 cyclones. Originally at 3-hourly resolution, interpolated to 1-hourly for this visualization."
                 citation="Couto de Souza, D. (2025). Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian LEC diagnostics (1979–2020). Zenodo."
                 doi="10.5281/zenodo.18133432"
                 doiUrl="https://doi.org/10.5281/zenodo.18133432"
-                role="All LEC energetics terms at 3-hourly resolution"
+                role="All LEC energetics terms (interpolated from 3-hourly to 1-hourly)"
               />
 
               <DataSourceCard
@@ -127,13 +136,17 @@ export default function AboutPage() {
               </div>
 
               <div>
-                <h3 className="font-medium text-gray-900 mb-2">Temporal Resolution</h3>
-                <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm">
-                  <p className="text-yellow-800 leading-relaxed">
-                    <strong>Important:</strong> Track positions (lon, lat, vor42) are recorded at <strong>1-hourly</strong> intervals. 
-                    LEC energetics are computed at <strong>3-hourly</strong> intervals. This means approximately 
-                    <strong> 33% of timesteps</strong> contain energetics data — the remaining 67% have NaN values 
-                    for energetics columns. This is expected behavior, not missing data.
+                <h3 className="font-medium text-gray-900 mb-2">Temporal Resolution &amp; Interpolation</h3>
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
+                  <p className="text-blue-800 leading-relaxed">
+                    <strong>Note on temporal resolution:</strong> Track positions (lon, lat, vor42) are recorded at <strong>1-hourly</strong> intervals. 
+                    LEC energetics are originally computed at <strong>3-hourly</strong> intervals. 
+                  </p>
+                  <p className="text-blue-800 leading-relaxed mt-2">
+                    <strong>Interpolation:</strong> To provide a complete time series, the 3-hourly energetics are 
+                    <strong> linearly interpolated</strong> to 1-hourly resolution during preprocessing. This is justified 
+                    because the LEC terms are smooth time series where linear interpolation provides a physically reasonable 
+                    representation of intermediate values. The original 3-hourly data points are preserved exactly.
                   </p>
                 </div>
               </div>
@@ -180,9 +193,10 @@ export default function AboutPage() {
                       sign inversion) and links them across time to form coherent tracks.
                     </p>
                     <p>
-                      The 400 hPa vorticity (<code className="bg-gray-100 px-1 py-0.5 rounded text-xs">vor42</code>) 
-                      is used as the primary intensity metric, capturing the cyclone's strength at mid-tropospheric 
-                      levels where the systems are typically most intense.
+                      The intensity metric <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">vor42</code> 
+                      represents <strong>filtered and normalized relative vorticity</strong>. The absolute value 
+                      is used to maintain positive values (×10⁻⁵ s⁻¹), providing a consistent intensity measure 
+                      across the Southern Hemisphere cyclone dataset.
                     </p>
                   </>
                 }
@@ -238,19 +252,24 @@ export default function AboutPage() {
                       that moves with the system, and energy budget terms are computed relative to zonal (Az, Kz) 
                       and eddy (Ae, Ke) components.
                     </p>
+                    <p className="mb-3">
+                      The LEC climatology for South Atlantic cyclones is documented in De Souza et al. (2025, Climate Dynamics), 
+                      which provides a comprehensive analysis of the energetic patterns across different genesis regions and 
+                      lifecycle phases.
+                    </p>
                     <div className="mt-3 bg-gray-50 border border-gray-200 rounded p-3 text-sm">
                       <p className="font-medium mb-2">LEC Terms:</p>
                       <ul className="space-y-1">
                         <li><strong>Reservoirs:</strong> Az (zonal APE), Ae (eddy APE), Kz (zonal KE), Ke (eddy KE) — in J m⁻²</li>
-                        <li><strong>Conversions:</strong> Ca (APE conversion), Ck (Kz→Ke), Ce, Cz — in W m⁻²</li>
-                        <li><strong>Boundaries:</strong> BAz, BAe, BKz, BKe (boundary fluxes), BΦZ, BΦE (pressure work) — in W m⁻²</li>
+                        <li><strong>Conversions:</strong> Ca (Az→Ae), Ce (Ae→Ke), Ck (Ke→Kz), Cz (Az→Kz) — in W m⁻²</li>
+                        <li><strong>Boundaries:</strong> BAz, BAe, BKz, BKe (boundary fluxes) — in W m⁻²</li>
                         <li><strong>Generation:</strong> Gz (zonal), Ge (eddy) — in W m⁻²</li>
                       </ul>
                     </div>
                     <p className="mt-3 text-gray-500 text-sm">
                       The LEC framework follows Lorenz (1955) as applied to extratropical cyclones in the 
-                      semi-Lagrangian formulation. Positive Ck and Ca indicate baroclinic conversion from 
-                      available potential energy to eddy kinetic energy — the classical energetic pathway of 
+                      semi-Lagrangian formulation. Positive Ca indicates baroclinic conversion from zonal to eddy APE, 
+                      and positive Ce indicates conversion from eddy APE to eddy KE — the classical energetic pathway of 
                       intensifying extratropical cyclones.
                     </p>
                   </>
@@ -268,7 +287,7 @@ export default function AboutPage() {
               <ul className="space-y-3 text-sm text-gray-700">
                 <li className="flex gap-2">
                   <span className="text-gray-400">•</span>
-                  <span>LEC energetics are only available at 3-hourly resolution (~33% of timesteps). Intermediate hours show NaN.</span>
+                  <span>LEC energetics are originally computed at 3-hourly resolution and linearly interpolated to 1-hourly. The interpolation is appropriate for these smooth time series but users should be aware of this processing step.</span>
                 </li>
                 <li className="flex gap-2">
                   <span className="text-gray-400">•</span>
@@ -304,6 +323,15 @@ export default function AboutPage() {
                 volume="44(10)"
                 pages="3568–3588"
                 doi="10.1002/joc.8566"
+              />
+              <Reference
+                authors="De Souza, D. C., Silva Dias, P. L. D., Gramcianinov, C. B., & Camargo, R."
+                year="2025"
+                title="Lorenz Energy Cycle Climatology for the Southwestern Atlantic Cyclones"
+                journal="Climate Dynamics"
+                volume="63(11)"
+                pages="1–26"
+                doi="10.1007/s00382-024-07555-z"
               />
               <Reference
                 authors="de Souza, D. C., da Silva Dias, P. L., Gramcianinov, C. B., & de Camargo, R."

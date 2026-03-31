@@ -20,24 +20,25 @@ The canonical data source is the Zenodo archive containing complete cyclone trac
 | Unique tracks | 6,789 |
 | Period | 1979-01-01 to 2021-01-07 |
 | Geographic coverage | South Atlantic (lat −74.9° to −16.0°, lon −84.3° to +179.9°) |
-| File size | ~143 MB |
+| File size | ~311 MB |
 
 ### Temporal Resolution
 
-| Data Type | Resolution | Notes |
-|-----------|------------|-------|
-| Track positions (lon, lat) | 1-hourly | 100% complete |
-| Vorticity (vor42) | 1-hourly | 100% complete |
-| LEC energetics | 3-hourly | ~33% of timesteps have data |
+| Data Type | Resolution | Coverage | Notes |
+|-----------|------------|----------|-------|
+| Track positions (lon, lat) | 1-hourly | 100% | Native resolution |
+| Vorticity (vor42) | 1-hourly | 100% | Native resolution |
+| LEC energetics | 1-hourly | ~98% | Interpolated from 3-hourly |
 
-**Important**: The ~67% "missing" energetics is **expected behaviour**. LEC diagnostics are computed at 3-hourly intervals, while track positions are recorded hourly.
+**Interpolation**: LEC diagnostics are originally computed at 3-hourly intervals. Since these are smooth time series representing gradually evolving energy budgets, they are **linearly interpolated** to 1-hourly resolution. Only track boundaries (first/last hours) have ~2% NaN where interpolation cannot fill gaps. See De Souza et al. (2025) Climate Dynamics for methodology.
 
 ## Data Sources
 
 | What | Reference |
 |------|-----------|
 | Cyclone tracks | Gramcianinov, C. B. et al. **Atlantic extratropical cyclone tracks in 41 years of ERA5 and CFSR/CFSv2 databases**. Mendeley Data. DOI: [10.17632/kwcvfr52hp.4](https://doi.org/10.17632/kwcvfr52hp.4) |
-| LEC diagnostics | **Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian LEC diagnostics (1979–2020)**. Zenodo. DOI: [10.5281/zenodo.18133432](https://doi.org/10.5281/zenodo.18133432) |
+| LEC diagnostics (data) | **Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian LEC diagnostics (1979–2020)**. Zenodo. DOI: [10.5281/zenodo.18133432](https://doi.org/10.5281/zenodo.18133432) |
+| LEC methodology | De Souza, D. C., Silva Dias, P. L. D., Gramcianinov, C. B., & Camargo, R. (2025). Lorenz Energy Cycle Climatology for the Southwestern Atlantic Cyclones. *Climate Dynamics*, 63(11), 1–26. DOI: [10.1007/s00382-024-07555-z](https://doi.org/10.1007/s00382-024-07555-z) |
 | Genesis regions | Gramcianinov, C. B., Hodges, K. I., & Camargo, R. D. (2019). The properties and genesis environments of South Atlantic cyclones. *Climate Dynamics*, 53(7), 4115–4140. DOI: [10.1007/s00382-019-04778-7](https://doi.org/10.1007/s00382-019-04778-7) |
 | Lifecycle phases | de Souza, D. C., da Dias, P. L. S., Gramcianinov, C. B., & de Camargo, R. (2025). Cyclophaser: A Python package for detecting extratropical cyclone life cycles. *JOSS*, 10(108), 7363. DOI: [10.21105/joss.07363](https://doi.org/10.21105/joss.07363) |
 | Phase results | Couto de Souza, D. et al. (2024). New perspectives on South Atlantic storm track through an automatic method for detecting extratropical cyclones' lifecycle. *Int. J. Climatol.*, 44(10), 3568–3588. DOI: [10.1002/joc.8566](https://doi.org/10.1002/joc.8566) |
@@ -52,7 +53,7 @@ The canonical data source is the Zenodo archive containing complete cyclone trac
 | `date` | datetime | 0% | UTC datetime of the position snapshot |
 | `lon` | float64 | 0% | Longitude of the cyclone centre (degrees) |
 | `lat` | float64 | 0% | Latitude of the cyclone centre (degrees) |
-| `vor42` | float64 | 0% | Relative vorticity at 400 hPa (×10⁻⁵ s⁻¹) |
+| `vor42` | float64 | 0% | Filtered and normalized relative vorticity at 850 hPa (×10⁻⁵ s⁻¹), absolute value used |
 
 ### Classification
 
@@ -65,45 +66,47 @@ The canonical data source is the Zenodo archive containing complete cyclone trac
 
 | Column | Type | Missing | Description |
 |--------|------|---------|-------------|
-| `Az` | float64 | 66.7% | Zonal available potential energy (J m⁻²) |
-| `Ae` | float64 | 66.7% | Eddy available potential energy (J m⁻²) |
-| `Kz` | float64 | 66.7% | Zonal kinetic energy (J m⁻²) |
-| `Ke` | float64 | 66.7% | Eddy kinetic energy (J m⁻²) |
+| `Az` | float64 | ~2% | Zonal available potential energy (J m⁻²) |
+| `Ae` | float64 | ~2% | Eddy available potential energy (J m⁻²) |
+| `Kz` | float64 | ~2% | Zonal kinetic energy (J m⁻²) |
+| `Ke` | float64 | ~2% | Eddy kinetic energy (J m⁻²) |
 
 ### LEC Conversion Terms
 
 | Column | Type | Missing | Description |
 |--------|------|---------|-------------|
-| `Cz` | float64 | 66.7% | Az → Kz conversion (W m⁻²) |
-| `Ca` | float64 | 66.7% | Az → Ae conversion (W m⁻²) |
-| `Ck` | float64 | 66.7% | Ke → Kz conversion (W m⁻²) |
-| `Ce` | float64 | 66.7% | Ae → Ke conversion (W m⁻²) |
+| `Cz` | float64 | ~2% | Az → Kz conversion (W m⁻²) |
+| `Ca` | float64 | ~2% | Az → Ae conversion (W m⁻²) |
+| `Ck` | float64 | ~2% | Ke → Kz conversion (W m⁻²) |
+| `Ce` | float64 | ~2% | Ae → Ke conversion (W m⁻²) |
 
 ### LEC Boundary Terms
 
 | Column | Type | Missing | Description |
 |--------|------|---------|-------------|
-| `BAz` | float64 | 66.7% | Boundary flux of Az (W m⁻²) |
-| `BAe` | float64 | 66.7% | Boundary flux of Ae (W m⁻²) |
-| `BKz` | float64 | 66.7% | Boundary flux of Kz (W m⁻²) |
-| `BKe` | float64 | 66.7% | Boundary flux of Ke (W m⁻²) |
-| `BΦZ` | float64 | 66.7% | Boundary geopotential flux, zonal (W m⁻²) |
-| `BΦE` | float64 | 66.7% | Boundary geopotential flux, eddy (W m⁻²) |
+| `BAz` | float64 | ~2% | Boundary flux of Az (W m⁻²) |
+| `BAe` | float64 | ~2% | Boundary flux of Ae (W m⁻²) |
+| `BKz` | float64 | ~2% | Boundary flux of Kz (W m⁻²) |
+| `BKe` | float64 | ~2% | Boundary flux of Ke (W m⁻²) |
+| `BΦZ` | float64 | ~2% | Boundary geopotential flux, zonal (W m⁻²) |
+| `BΦE` | float64 | ~2% | Boundary geopotential flux, eddy (W m⁻²) |
 
 ### LEC Generation and Residual Terms
 
 | Column | Type | Missing | Description |
 |--------|------|---------|-------------|
-| `Gz` | float64 | 66.7% | Generation of zonal APE (W m⁻²) |
-| `Ge` | float64 | 66.7% | Generation of eddy APE (W m⁻²) |
-| `dAzdt` | float64 | 66.7% | Time tendency of Az (W m⁻²) |
-| `dAedt` | float64 | 66.7% | Time tendency of Ae (W m⁻²) |
-| `dKzdt` | float64 | 66.7% | Time tendency of Kz (W m⁻²) |
-| `dKedt` | float64 | 66.7% | Time tendency of Ke (W m⁻²) |
-| `RGz` | float64 | 66.7% | Residual generation, zonal (W m⁻²) |
-| `RGe` | float64 | 66.7% | Residual generation, eddy (W m⁻²) |
-| `RKz` | float64 | 66.7% | Residual kinetic, zonal (W m⁻²) |
-| `RKe` | float64 | 66.7% | Residual kinetic, eddy (W m⁻²) |
+| `Gz` | float64 | ~2% | Generation of zonal APE (W m⁻²) |
+| `Ge` | float64 | ~2% | Generation of eddy APE (W m⁻²) |
+| `dAzdt` | float64 | ~2% | Time tendency of Az (W m⁻²) |
+| `dAedt` | float64 | ~2% | Time tendency of Ae (W m⁻²) |
+| `dKzdt` | float64 | ~2% | Time tendency of Kz (W m⁻²) |
+| `dKedt` | float64 | ~2% | Time tendency of Ke (W m⁻²) |
+| `RGz` | float64 | ~2% | Residual generation, zonal (W m⁻²) |
+| `RGe` | float64 | ~2% | Residual generation, eddy (W m⁻²) |
+| `RKz` | float64 | ~2% | Residual kinetic, zonal (W m⁻²) |
+| `RKe` | float64 | ~2% | Residual kinetic, eddy (W m⁻²) |
+
+**Note:** All LEC columns show ~2% missing after interpolation. Original data was 3-hourly (~67% missing); linear interpolation within each track fills intermediate hours, leaving only track boundaries unfilled.
 
 ## Derived Web Artefacts
 

@@ -70,15 +70,15 @@ The consolidated CSV contains **631,009 timesteps** across **6,789 cyclones** wi
 | `track_id` | Cyclone identifier (YYYYNNNN) | — |
 | `date` | UTC timestamp | 1-hourly |
 | `lon`, `lat` | Position (degrees) | 1-hourly |
-| `vor42` | Relative vorticity (×10⁻⁵ s⁻¹) | 1-hourly |
+| `vor42` | Filtered/normalized relative vorticity (×10⁻⁵ s⁻¹) | 1-hourly |
 | `region` | Genesis region (ARG, LA-PLATA, SE-BR) | — |
 | `period` | Lifecycle phase (incipient, intensification, mature, decay) | 1-hourly |
-| `Az`, `Ae`, `Kz`, `Ke` | LEC energy reservoirs (J m⁻²) | 3-hourly |
-| `Ca`, `Ck`, `Ce`, `Cz` | LEC conversion terms (W m⁻²) | 3-hourly |
-| `BAz`, `BAe`, `BKz`, `BKe` | LEC boundary terms (W m⁻²) | 3-hourly |
-| `Gz`, `Ge` | LEC generation terms (W m⁻²) | 3-hourly |
+| `Az`, `Ae`, `Kz`, `Ke` | LEC energy reservoirs (J m⁻²) | 1-hourly (interpolated) |
+| `Ca`, `Ck`, `Ce`, `Cz` | LEC conversion terms (W m⁻²) | 1-hourly (interpolated) |
+| `BAz`, `BAe`, `BKz`, `BKe` | LEC boundary terms (W m⁻²) | 1-hourly (interpolated) |
+| `Gz`, `Ge` | LEC generation terms (W m⁻²) | 1-hourly (interpolated) |
 
-**Note:** LEC energetics are available at 3-hourly intervals (~33% of timesteps). This is expected behaviour; the remaining timesteps have NaN for energetics columns.
+**Note:** LEC energetics are originally at 3-hourly resolution, linearly interpolated to 1-hourly (~98% coverage). The energetics are smooth time series where interpolation is scientifically appropriate. Only track boundaries (first/last hours) may have NaN values where interpolation cannot fill gaps.
 
 ---
 
@@ -87,7 +87,8 @@ The consolidated CSV contains **631,009 timesteps** across **6,789 cyclones** wi
 | Dataset | Reference |
 |---------|-----------|
 | Cyclone tracks | Gramcianinov et al. **Atlantic extratropical cyclone tracks in 41 years of ERA5 and CFSR/CFSv2 databases**. Mendeley Data. DOI: [10.17632/kwcvfr52hp.4](https://doi.org/10.17632/kwcvfr52hp.4) |
-| LEC diagnostics | **Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian LEC diagnostics (1979–2020)**. Zenodo. DOI: [10.5281/zenodo.18133432](https://doi.org/10.5281/zenodo.18133432) |
+| LEC diagnostics (data) | **Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian LEC diagnostics (1979–2020)**. Zenodo. DOI: [10.5281/zenodo.18133432](https://doi.org/10.5281/zenodo.18133432) |
+| LEC methodology | De Souza, D. C., Silva Dias, P. L. D., Gramcianinov, C. B., & Camargo, R. (2025). Lorenz Energy Cycle Climatology for the Southwestern Atlantic Cyclones. *Climate Dynamics*, 63(11), 1–26. DOI: [10.1007/s00382-024-07555-z](https://doi.org/10.1007/s00382-024-07555-z) |
 | Genesis regions | Gramcianinov, C. B., Hodges, K. I., & Camargo, R. D. (2019). The properties and genesis environments of South Atlantic cyclones. *Climate Dynamics*, 53(7), 4115–4140. DOI: [10.1007/s00382-019-04778-7](https://doi.org/10.1007/s00382-019-04778-7) |
 | Lifecycle phases | de Souza, D. C. et al. (2025). Cyclophaser: A Python package for detecting extratropical cyclone life cycles. *JOSS*, 10(108), 7363. DOI: [10.21105/joss.07363](https://doi.org/10.21105/joss.07363) |
 | Phase analysis | Couto de Souza, D. et al. (2024). New perspectives on South Atlantic storm track through an automatic method for detecting extratropical cyclones' lifecycle. *Int. J. Climatol.*, 44(10), 3568–3588. DOI: [10.1002/joc.8566](https://doi.org/10.1002/joc.8566) |

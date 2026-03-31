@@ -26,8 +26,9 @@ export interface TrackSummary {
   lysis_lon: number;
   /** Named genesis region derived from genesis lat/lon. */
   genesis_region: string;
-  /** Maximum vor42 (400 hPa vorticity, s⁻¹) across all track timesteps.
-   *  This is the intensity measure used throughout the application. */
+  /** Maximum vor42 (filtered and normalized relative vorticity, ×10⁻⁵ s⁻¹).
+   *  Absolute value is used to keep positive values. This is the intensity
+   *  measure used throughout the application. */
   max_vor42: number;
   /** Intensity quantile label relative to all tracks in the dataset. */
   quantile: "top 5%" | "top 10%" | "top 25%" | "top 50%" | "bottom 50%";
@@ -68,27 +69,42 @@ export interface Timestep {
   lon: number;
   /** Latitude, degrees. */
   lat: number;
-  /** Relative vorticity at 400 hPa (s⁻¹). Intensity measure. */
+  /** Filtered and normalized relative vorticity (×10⁻⁵ s⁻¹). Intensity measure.
+   *  Absolute value is used to keep positive values. */
   vor42: number;
   /**
    * Lifecycle phase, following the Cyclophaser convention
    * (de Souza et al., JOSS 2025; IJC 2024).
-   * Derived heuristically from the vor42 time series in the preprocessing script.
    */
   phase: "incipient" | "intensification" | "mature" | "decay" | "dissipation";
-  // Lorenz Energy Cycle diagnostics — present only at ~33 % of timesteps.
+  // Lorenz Energy Cycle diagnostics (de Souza et al., Climate Dynamics 2025).
+  // Originally 3-hourly, interpolated to 1-hourly in preprocessing.
+  /** Zonal available potential energy (J m⁻²). */
+  Az?: number;
+  /** Eddy available potential energy (J m⁻²). */
+  Ae?: number;
   /** Zonal kinetic energy (J m⁻²). */
   Kz?: number;
   /** Eddy kinetic energy (J m⁻²). */
   Ke?: number;
+  /** Az→Ae conversion (W m⁻²). */
+  Ca?: number;
+  /** Ae→Ke conversion (W m⁻²). */
+  Ce?: number;
   /** Kz→Ke conversion (W m⁻²). */
   Ck?: number;
-  /** Available potential energy conversion (W m⁻²). */
-  Ca?: number;
-  /** Baroclinic generation of eddy APE (W m⁻²). */
+  /** Az→Kz conversion (W m⁻²). */
+  Cz?: number;
+  /** Boundary flux of zonal APE (W m⁻²). */
+  BAz?: number;
+  /** Boundary flux of eddy APE (W m⁻²). */
   BAe?: number;
-  /** Baroclinic generation of eddy KE (W m⁻²). */
+  /** Boundary flux of zonal KE (W m⁻²). */
+  BKz?: number;
+  /** Boundary flux of eddy KE (W m⁻²). */
   BKe?: number;
+  /** Generation of zonal APE (W m⁻²). */
+  Gz?: number;
   /** Generation of eddy APE (W m⁻²). */
   Ge?: number;
 }

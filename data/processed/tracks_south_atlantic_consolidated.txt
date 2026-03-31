@@ -3,7 +3,7 @@ Validation Report
 ======================================================================
 
 Output file: /Users/danilocoutodesouza/Documents/Programs_and_scripts/cyclone_monitor_south_atlantic/data/processed/tracks_south_atlantic_consolidated.csv
-Generated: 2026-03-30 21:57:42
+Generated: 2026-03-30 23:22:27
 
 ──────────────────────────────────────────────────────────────────────
 Dataset Summary
@@ -34,18 +34,20 @@ Lifecycle Phase Distribution
   incipient 2         :       22 rows (  0.0%)
 
 ──────────────────────────────────────────────────────────────────────
-LEC Energetics Coverage
+LEC Energetics Coverage (after interpolation)
 ──────────────────────────────────────────────────────────────────────
-  (Expected ~33% — energetics are 3-hourly, tracks are 1-hourly)
+  LEC terms interpolated from 3-hourly to 1-hourly resolution.
+  Linear interpolation applied within each track (no extrapolation).
+  Reference: De Souza et al. (2025), Climate Dynamics.
 
-  Az    : ██████░░░░░░░░░░░░░░  33.3%
-  Ae    : ██████░░░░░░░░░░░░░░  33.3%
-  Kz    : ██████░░░░░░░░░░░░░░  33.3%
-  Ke    : ██████░░░░░░░░░░░░░░  33.3%
-  Ca    : ██████░░░░░░░░░░░░░░  33.3%
-  Ck    : ██████░░░░░░░░░░░░░░  33.3%
-  Ce    : ██████░░░░░░░░░░░░░░  33.3%
-  Cz    : ██████░░░░░░░░░░░░░░  33.3%
+  Az    : ███████████████████░  97.8%
+  Ae    : ███████████████████░  97.8%
+  Kz    : ███████████████████░  97.8%
+  Ke    : ███████████████████░  97.8%
+  Ca    : ███████████████████░  97.8%
+  Ck    : ███████████████████░  97.8%
+  Ce    : ███████████████████░  97.8%
+  Cz    : ███████████████████░  97.8%
 
 ──────────────────────────────────────────────────────────────────────
 Column List
@@ -57,29 +59,29 @@ Column List
    5. vor42                          float64         (  0.0% null)
    6. region                         object          (  0.0% null)
    7. period                         object          (  7.9% null)
-   8. Az                             float64         ( 66.7% null)
-   9. Ae                             float64         ( 66.7% null)
-  10. Kz                             float64         ( 66.7% null)
-  11. Ke                             float64         ( 66.7% null)
-  12. Cz                             float64         ( 66.7% null)
-  13. Ca                             float64         ( 66.7% null)
-  14. Ck                             float64         ( 66.7% null)
-  15. Ce                             float64         ( 66.7% null)
-  16. BAz                            float64         ( 66.7% null)
-  17. BAe                            float64         ( 66.7% null)
-  18. BKz                            float64         ( 66.7% null)
-  19. BKe                            float64         ( 66.7% null)
-  20. BΦZ                            float64         ( 66.7% null)
-  21. BΦE                            float64         ( 66.7% null)
-  22. Gz                             float64         ( 66.7% null)
-  23. Ge                             float64         ( 66.7% null)
-  24. dAzdt                          float64         ( 66.7% null)
-  25. dAedt                          float64         ( 66.7% null)
-  26. dKzdt                          float64         ( 66.7% null)
-  27. dKedt                          float64         ( 66.7% null)
-  28. RGz                            float64         ( 66.7% null)
-  29. RGe                            float64         ( 66.7% null)
-  30. RKz                            float64         ( 66.7% null)
-  31. RKe                            float64         ( 66.7% null)
+   8. Az                             float64         (  2.2% null)
+   9. Ae                             float64         (  2.2% null)
+  10. Kz                             float64         (  2.2% null)
+  11. Ke                             float64         (  2.2% null)
+  12. Cz                             float64         (  2.2% null)
+  13. Ca                             float64         (  2.2% null)
+  14. Ck                             float64         (  2.2% null)
+  15. Ce                             float64         (  2.2% null)
+  16. BAz                            float64         (  2.2% null)
+  17. BAe                            float64         (  2.2% null)
+  18. BKz                            float64         (  2.2% null)
+  19. BKe                            float64         (  2.2% null)
+  20. BΦZ                            float64         (  2.2% null)
+  21. BΦE                            float64         (  2.2% null)
+  22. Gz                             float64         (  2.2% null)
+  23. Ge                             float64         (  2.2% null)
+  24. dAzdt                          float64         (  2.2% null)
+  25. dAedt                          float64         (  2.2% null)
+  26. dKzdt                          float64         (  2.2% null)
+  27. dKedt                          float64         (  2.2% null)
+  28. RGz                            float64         (  2.2% null)
+  29. RGe                            float64         (  2.2% null)
+  30. RKz                            float64         (  2.2% null)
+  31. RKe                            float64         (  2.2% null)
 
 ======================================================================
