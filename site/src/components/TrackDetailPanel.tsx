@@ -137,12 +137,31 @@ export default function TrackDetailPanel({
               )}
               {" "}· click a row or map marker
             </p>
+            {/* Column header */}
+            <div className="flex items-center gap-2 px-2 py-0.5 text-xs text-gray-400 border-b border-gray-100">
+              <span className="w-2 h-2 flex-shrink-0 invisible" />
+              <span className="flex-1">Date / Time (UTC)</span>
+              <span
+                className="flex-shrink-0"
+                title="vor42: filtered and normalized 850 hPa relative vorticity (×10⁻⁵ s⁻¹). Absolute value used."
+              >
+                vor42
+              </span>
+              {lecCount > 0 && <span className="w-1.5 flex-shrink-0" />}
+            </div>
             <div className="space-y-0.5">
               {timesteps.map((ts, i) => {
                 const isSelected =
                   selectedTimestep?.date === ts.date &&
                   selectedTimestep?.lon === ts.lon;
                 const hasLec = ts.Kz !== undefined;
+                // Determine if LEC value at this timestep is original (3-hourly) or interpolated.
+                // Use lec_original flag from JSON when available; fall back to hour-divisible-by-3 heuristic.
+                const lecIsOriginal = hasLec
+                  ? (ts.lec_original !== undefined
+                      ? ts.lec_original
+                      : new Date(ts.date).getUTCHours() % 3 === 0)
+                  : false;
                 return (
                   <button
                     key={i}
@@ -163,25 +182,46 @@ export default function TrackDetailPanel({
                       {ts.date.replace("T", " ").slice(0, 16)}
                     </span>
                     {/* vor42 */}
-                    <span className="flex-shrink-0 text-gray-400">
+                    <span
+                      className="flex-shrink-0 text-gray-400 font-mono"
+                      title="vor42 (×10⁻⁵ s⁻¹)"
+                    >
                       {ts.vor42.toFixed(2)}
                     </span>
-                    {/* LEC indicator */}
+                    {/* LEC indicator: solid = original 3-hourly; ring = interpolated */}
                     {hasLec && (
-                      <span
-                        className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500"
-                        title="LEC data available"
-                      />
+                      lecIsOriginal ? (
+                        <span
+                          className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500"
+                          title="LEC data: original (3-hourly)"
+                        />
+                      ) : (
+                        <span
+                          className="flex-shrink-0 w-1.5 h-1.5 rounded-full border border-blue-400"
+                          title="LEC data: linearly interpolated"
+                        />
+                      )
                     )}
                   </button>
                 );
               })}
             </div>
             {lecCount > 0 && (
-              <p className="text-xs text-gray-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
-                Blue dot = LEC diagnostics available
-              </p>
+              <div className="space-y-0.5 pt-0.5">
+                <p className="text-xs text-gray-400">
+                  vor42 = filtered 850 hPa relative vorticity (×10⁻⁵ s⁻¹)
+                </p>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-400">
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block flex-shrink-0" />
+                    LEC original (3-hourly)
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full border border-blue-400 inline-block flex-shrink-0" />
+                    LEC interpolated (1-hourly)
+                  </span>
+                </div>
+              </div>
             )}
           </>
         )}
@@ -277,7 +317,7 @@ function TimestepDetail({ ts }: { ts: Timestep }) {
           Lorenz Energy Cycle
           {!hasEnergetics && (
             <span className="font-normal text-gray-400 ml-1">
-              — not computed at this timestep (available at ~1/3 of timesteps)
+              — not available at this timestep
             </span>
           )}
         </p>
@@ -290,15 +330,15 @@ function TimestepDetail({ ts }: { ts: Timestep }) {
             <InfoRow label="Ke — Eddy KE"   value={ts.Ke  !== undefined ? `${ts.Ke.toFixed(0)} J m⁻²` : "—"} />
             {/* Conversion & generation terms */}
             <p className="text-xs text-gray-400 font-medium mt-1.5">Conversion & generation</p>
-            <InfoRow label="Ck — Kz→Ke"     value={ts.Ck  !== undefined ? `${ts.Ck.toFixed(3)} W m⁻²` : "—"} />
-            <InfoRow label="Ca — APE conv."  value={ts.Ca  !== undefined ? `${ts.Ca.toFixed(3)} W m⁻²` : "—"} />
-            <InfoRow label="BAe — Barocl. APE gen." value={ts.BAe !== undefined ? `${ts.BAe.toFixed(3)} W m⁻²` : "—"} />
-            <InfoRow label="BKe — Barocl. KE gen."  value={ts.BKe !== undefined ? `${ts.BKe.toFixed(3)} W m⁻²` : "—"} />
-            <InfoRow label="Ge — Eddy APE gen."     value={ts.Ge  !== undefined ? `${ts.Ge.toFixed(3)} W m⁻²` : "—"} />
+            <InfoRow label="Ck — Ke→Kz (+)"  value={ts.Ck  !== undefined ? `${ts.Ck.toFixed(3)} W m⁻²` : "—"} />
+            <InfoRow label="Ca — Az→Ae"      value={ts.Ca  !== undefined ? `${ts.Ca.toFixed(3)} W m⁻²` : "—"} />
+            <InfoRow label="BAe — Ae boundary" value={ts.BAe !== undefined ? `${ts.BAe.toFixed(3)} W m⁻²` : "—"} />
+            <InfoRow label="BKe — Ke boundary" value={ts.BKe !== undefined ? `${ts.BKe.toFixed(3)} W m⁻²` : "—"} />
+            <InfoRow label="Ge — Eddy APE gen." value={ts.Ge  !== undefined ? `${ts.Ge.toFixed(3)} W m⁻²` : "—"} />
           </div>
         ) : (
           <p className="text-xs text-gray-400 italic">
-            Select a timestep with the blue dot indicator to see LEC diagnostics.
+            Select a timestep with a blue dot (solid = original, ring = interpolated) to see LEC diagnostics.
           </p>
         )}
       </div>

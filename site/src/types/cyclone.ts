@@ -91,7 +91,10 @@ export interface Timestep {
   Ca?: number;
   /** Ae→Ke conversion (W m⁻²). */
   Ce?: number;
-  /** Kz→Ke conversion (W m⁻²). */
+  /** Ke→Kz conversion (W m⁻²).
+   *  Positive = KE→KZ (barotropic dissipation); negative = KZ→KE (barotropic
+   *  development driving the cyclone). Sign convention from LorenzCycleToolkit
+   *  (de Souza et al., JOSS 2024). */
   Ck?: number;
   /** Az→Kz conversion (W m⁻²). */
   Cz?: number;
@@ -107,6 +110,14 @@ export interface Timestep {
   Gz?: number;
   /** Generation of eddy APE (W m⁻²). */
   Ge?: number;
+  /**
+   * True  = LEC value is from the original 3-hourly computation.
+   * False = LEC value was linearly interpolated from adjacent 3-hourly values.
+   * Absent = no LEC data at this timestep.
+   * For JSON files produced before this flag was added, use the heuristic
+   * `new Date(date).getUTCHours() % 3 === 0` as an approximation.
+   */
+  lec_original?: boolean;
 }
 
 /** Detail object per track inside a year detail file. */

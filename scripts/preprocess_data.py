@@ -300,11 +300,19 @@ def main():
                 "phase": phases[j - grp.index[0]],
             }
             # Include all available energetics columns
-            for col in ["Az", "Ae", "Kz", "Ke", "Cz", "Ca", "Ck", "Ce", 
+            has_lec = False
+            for col in ["Az", "Ae", "Kz", "Ke", "Cz", "Ca", "Ck", "Ce",
                        "BAz", "BAe", "BKz", "BKe", "Gz", "Ge"]:
                 v = safe_float(row.get(col), ENERGETICS_DECIMALS)
                 if v is not None:
                     ts[col] = v
+                    has_lec = True
+            # Provenance flag: True = original 3-hourly value, False = linearly interpolated.
+            # Only included when LEC data is present at this timestep.
+            if has_lec:
+                raw = row.get("lec_original")
+                if raw is not None and not (isinstance(raw, float) and math.isnan(raw)):
+                    ts["lec_original"] = bool(raw)
             timesteps.append(ts)
 
         if year not in year_data:

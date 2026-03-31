@@ -84,6 +84,8 @@ COLUMN_ORDER = [
     "track_id", "date",
     # Position
     "lon", "lat", "vor42",
+    # LEC provenance flag (True = original 3-hourly value; False = linearly interpolated)
+    "lec_original",
     # Classification
     "region", "period",
     # Energy reservoirs
@@ -157,12 +159,17 @@ def interpolate_energetics(df: pd.DataFrame) -> pd.DataFrame:
         return df
     
     print(f"  Interpolating {len(lec_cols_present)} columns: {', '.join(lec_cols_present[:5])}...")
-    
+
     # Track original coverage
     orig_coverage = df[lec_cols_present[0]].notna().sum() / len(df) * 100
-    
+
     # Sort by track_id and date first
     df = df.sort_values(["track_id", "date"]).reset_index(drop=True)
+
+    # Flag original (non-null) LEC timesteps BEFORE interpolation.
+    # True  = value was computed at this timestep (original 3-hourly resolution).
+    # False = value will be linearly interpolated (or no LEC data at all).
+    df["lec_original"] = df[lec_cols_present[0]].notna()
     
     # Group by track and interpolate within each track
     def interpolate_track(group):

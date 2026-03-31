@@ -137,18 +137,64 @@ export default function AboutPage() {
 
               <div>
                 <h3 className="font-medium text-gray-900 mb-2">Temporal Resolution &amp; Interpolation</h3>
-                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm space-y-2">
                   <p className="text-blue-800 leading-relaxed">
-                    <strong>Note on temporal resolution:</strong> Track positions (lon, lat, vor42) are recorded at <strong>1-hourly</strong> intervals. 
-                    LEC energetics are originally computed at <strong>3-hourly</strong> intervals. 
+                    <strong>Track data (lon, lat, vor42):</strong> 1-hourly resolution throughout.
                   </p>
-                  <p className="text-blue-800 leading-relaxed mt-2">
-                    <strong>Interpolation:</strong> To provide a complete time series, the 3-hourly energetics are 
-                    <strong> linearly interpolated</strong> to 1-hourly resolution during preprocessing. This is justified 
-                    because the LEC terms are smooth time series where linear interpolation provides a physically reasonable 
-                    representation of intermediate values. The original 3-hourly data points are preserved exactly.
+                  <p className="text-blue-800 leading-relaxed">
+                    <strong>LEC energetics (Az, Ae, Kz, Ke, Ca, Ce, Ck, Cz, BAz, BAe, BKz, BKe, Gz, Ge):</strong>{" "}
+                    originally computed at <strong>3-hourly</strong> intervals (~33 % of track timesteps).
+                    To provide a continuous time series, the 3-hourly values are{" "}
+                    <strong>linearly interpolated</strong> to 1-hourly during preprocessing
+                    (per-track, no extrapolation beyond the first/last available LEC value).
+                    After interpolation, LEC coverage reaches ~97.8 % of all timesteps.
+                  </p>
+                  <p className="text-blue-800 leading-relaxed">
+                    <strong>The original 3-hourly values are preserved exactly.</strong>{" "}
+                    Interpolated values are physically reasonable estimates but carry additional uncertainty.
                   </p>
                 </div>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-gray-900 mb-2">Identifying Original vs. Interpolated LEC Values</h3>
+                <p className="text-gray-600 text-sm leading-relaxed mb-2">
+                  The web interface distinguishes original and interpolated LEC values at each timestep:
+                </p>
+                <div className="bg-white border border-gray-200 rounded p-3 text-sm space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+                    <span className="text-gray-700">
+                      <strong>Solid blue dot</strong> in the timestep list — LEC value from the original
+                      3-hourly computation. Highest confidence.
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 w-2.5 h-2.5 rounded-full border-2 border-blue-400 flex-shrink-0" />
+                    <span className="text-gray-700">
+                      <strong>Open blue ring</strong> in the timestep list — LEC value was linearly
+                      interpolated from the adjacent 3-hourly points. Use with care for detailed analysis.
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 w-2.5 h-2.5 flex-shrink-0" />
+                    <span className="text-gray-700">
+                      <strong>No dot</strong> — no LEC data available at this timestep (first/last
+                      timesteps of a track, where interpolation cannot be applied without extrapolating).
+                    </span>
+                  </div>
+                </div>
+                <p className="text-gray-500 text-xs mt-2 leading-relaxed">
+                  The phase-averaged LEC diagrams and tables (Box Diagram view) report both the total
+                  number of timesteps and the number of <em>original</em> timesteps used in each average,
+                  so you can assess how much of the average comes from directly-computed values.
+                </p>
+                <p className="text-gray-500 text-xs mt-1 leading-relaxed">
+                  For JSON files generated before the <code className="bg-gray-100 px-1 rounded">lec_original</code> flag
+                  was added, the interface approximates original timesteps using the
+                  heuristic <code className="bg-gray-100 px-1 rounded">UTC hour % 3 = 0</code>,
+                  which is accurate because LEC is computed at 00, 03, 06 … 21 UTC.
+                </p>
               </div>
 
               <div>
@@ -258,19 +304,25 @@ export default function AboutPage() {
                       lifecycle phases.
                     </p>
                     <div className="mt-3 bg-gray-50 border border-gray-200 rounded p-3 text-sm">
-                      <p className="font-medium mb-2">LEC Terms:</p>
+                      <p className="font-medium mb-2">LEC Terms (sign conventions from LorenzCycleToolkit):</p>
                       <ul className="space-y-1">
                         <li><strong>Reservoirs:</strong> Az (zonal APE), Ae (eddy APE), Kz (zonal KE), Ke (eddy KE) — in J m⁻²</li>
-                        <li><strong>Conversions:</strong> Ca (Az→Ae), Ce (Ae→Ke), Ck (Ke→Kz), Cz (Az→Kz) — in W m⁻²</li>
-                        <li><strong>Boundaries:</strong> BAz, BAe, BKz, BKe (boundary fluxes) — in W m⁻²</li>
-                        <li><strong>Generation:</strong> Gz (zonal), Ge (eddy) — in W m⁻²</li>
+                        <li><strong>Conversions:</strong> Ca (Az→Ae), Ce (Ae→Ke), Cz (Az→Kz) — positive = forward direction</li>
+                        <li>
+                          <strong>Ck:</strong> positive = Ke→Kz (barotropic <em>dissipation</em>);{" "}
+                          <strong>negative = Kz→Ke</strong> (barotropic <em>development</em>, cyclone-growth pathway).
+                          This convention is from LorenzCycleToolkit (de Souza et al., JOSS 2024):
+                          the more negative Ck becomes, the stronger the barotropic conversion driving the cyclone.
+                        </li>
+                        <li><strong>Boundaries:</strong> BAz, BAe, BKz, BKe — net import through the moving domain boundary (W m⁻²). Positive = net import.</li>
+                        <li><strong>Generation:</strong> Gz (zonal APE generation from meridional heating), Ge (eddy APE generation) — in W m⁻²</li>
                       </ul>
                     </div>
                     <p className="mt-3 text-gray-500 text-sm">
-                      The LEC framework follows Lorenz (1955) as applied to extratropical cyclones in the 
-                      semi-Lagrangian formulation. Positive Ca indicates baroclinic conversion from zonal to eddy APE, 
-                      and positive Ce indicates conversion from eddy APE to eddy KE — the classical energetic pathway of 
-                      intensifying extratropical cyclones.
+                      The LEC framework follows Lorenz (1955) as applied to extratropical cyclones in the
+                      semi-Lagrangian formulation. The classical intensification pathway is:
+                      Gz→Az →(Ca)→ Ae →(Ce)→ Ke, i.e., baroclinic conversion of available potential energy
+                      into eddy kinetic energy. This appears as positive Ca and Ce during intensification.
                     </p>
                   </>
                 }
@@ -287,7 +339,12 @@ export default function AboutPage() {
               <ul className="space-y-3 text-sm text-gray-700">
                 <li className="flex gap-2">
                   <span className="text-gray-400">•</span>
-                  <span>LEC energetics are originally computed at 3-hourly resolution and linearly interpolated to 1-hourly. The interpolation is appropriate for these smooth time series but users should be aware of this processing step.</span>
+                  <span>
+                    <strong>LEC interpolation:</strong> Energetics are originally at 3-hourly resolution (~33 % of timesteps).
+                    The remaining ~65 % are linearly interpolated. The interface marks original timesteps
+                    with a solid blue dot and interpolated ones with an open ring. Phase-averaged diagrams
+                    report the split explicitly. Do not over-interpret individual interpolated values.
+                  </span>
                 </li>
                 <li className="flex gap-2">
                   <span className="text-gray-400">•</span>
