@@ -125,102 +125,95 @@ export default function TrackDetailPanel({
           </p>
         )}
 
-        {/* ── Timestep list ─────────────────────────────────────────────── */}
+        {/* ── Timestep selector (dropdown) ─────────────────────────────────── */}
         {timesteps && !loading && (
           <>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 mb-1">
               {timesteps.length} timesteps
               {lecCount > 0 && (
                 <span className="ml-1">
                   · <span className="text-blue-600 font-medium">{lecCount}</span> with LEC data
                 </span>
               )}
-              {" "}· click a row or map marker
             </p>
-            {/* Column header */}
-            <div className="flex items-center gap-2 px-2 py-0.5 text-xs text-gray-400 border-b border-gray-100">
-              <span className="w-2 h-2 flex-shrink-0 invisible" />
-              <span className="flex-1">Date / Time (UTC)</span>
-              <span
-                className="flex-shrink-0"
-                title="vor42: filtered and normalized 850 hPa relative vorticity (×10⁻⁵ s⁻¹). Absolute value used."
+            
+            {/* Dropdown selector */}
+            <div className="relative">
+              <select
+                value={selectedTimestep ? timesteps.findIndex(ts => ts.date === selectedTimestep.date && ts.lon === selectedTimestep.lon) : ""}
+                onChange={(e) => {
+                  const idx = e.target.value;
+                  if (idx === "") {
+                    onTimestepSelect(null);
+                  } else {
+                    onTimestepSelect(timesteps[parseInt(idx)]);
+                  }
+                }}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
               >
-                vor42
-              </span>
-              {lecCount > 0 && <span className="w-1.5 flex-shrink-0" />}
+                <option value="">Select a timestep...</option>
+                {timesteps.map((ts, i) => {
+                  const hasLec = ts.Kz !== undefined;
+                  const lecIsOriginal = hasLec
+                    ? (ts.lec_original !== undefined ? ts.lec_original : new Date(ts.date).getUTCHours() % 3 === 0)
+                    : false;
+                  const lecIndicator = hasLec ? (lecIsOriginal ? " ●" : " ○") : "";
+                  return (
+                    <option key={i} value={i}>
+                      {ts.date.replace("T", " ").slice(0, 16)} · {PHASE_LABELS[ts.phase]} · vor42: {ts.vor42.toFixed(2)}{lecIndicator}
+                    </option>
+                  );
+                })}
+              </select>
+              {/* Custom dropdown arrow */}
+              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
             </div>
-            <div className="space-y-0.5">
-              {timesteps.map((ts, i) => {
-                const isSelected =
-                  selectedTimestep?.date === ts.date &&
-                  selectedTimestep?.lon === ts.lon;
-                const hasLec = ts.Kz !== undefined;
-                // Determine if LEC value at this timestep is original (3-hourly) or interpolated.
-                // Use lec_original flag from JSON when available; fall back to hour-divisible-by-3 heuristic.
-                const lecIsOriginal = hasLec
-                  ? (ts.lec_original !== undefined
-                      ? ts.lec_original
-                      : new Date(ts.date).getUTCHours() % 3 === 0)
-                  : false;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => onTimestepSelect(isSelected ? null : ts)}
-                    className={`w-full text-left flex items-center gap-2 px-2 py-1 rounded text-xs transition ${
-                      isSelected
-                        ? "bg-orange-100 text-orange-800 border border-orange-200"
-                        : "hover:bg-gray-100 text-gray-600"
-                    }`}
-                  >
-                    {/* Phase dot */}
-                    <span
-                      className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ background: PHASE_COLORS[ts.phase] }}
-                    />
-                    {/* Date */}
-                    <span className="font-mono flex-1 truncate">
-                      {ts.date.replace("T", " ").slice(0, 16)}
-                    </span>
-                    {/* vor42 */}
-                    <span
-                      className="flex-shrink-0 text-gray-400 font-mono"
-                      title="vor42 (×10⁻⁵ s⁻¹)"
-                    >
-                      {ts.vor42.toFixed(2)}
-                    </span>
-                    {/* LEC indicator: solid = original 3-hourly; ring = interpolated */}
-                    {hasLec && (
-                      lecIsOriginal ? (
-                        <span
-                          className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-blue-500"
-                          title="LEC data: original (3-hourly)"
-                        />
-                      ) : (
-                        <span
-                          className="flex-shrink-0 w-1.5 h-1.5 rounded-full border border-blue-400"
-                          title="LEC data: linearly interpolated"
-                        />
-                      )
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            {lecCount > 0 && (
-              <div className="space-y-0.5 pt-0.5">
-                <p className="text-xs text-gray-400">
-                  vor42 = filtered 850 hPa relative vorticity (×10⁻⁵ s⁻¹)
-                </p>
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-400">
-                  <span className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block flex-shrink-0" />
-                    LEC original (3-hourly)
+
+            {/* Selected timestep details */}
+            {selectedTimestep && (
+              <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-200">
+                <div className="flex items-center gap-2 text-xs">
+                  <span
+                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ background: PHASE_COLORS[selectedTimestep.phase] }}
+                  />
+                  <span className="font-medium text-orange-800">
+                    {PHASE_LABELS[selectedTimestep.phase]}
                   </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full border border-blue-400 inline-block flex-shrink-0" />
-                    LEC interpolated (1-hourly)
+                  <span className="text-gray-500">·</span>
+                  <span className="text-gray-600 font-mono">
+                    {selectedTimestep.date.replace("T", " ").slice(0, 16)} UTC
                   </span>
                 </div>
+                <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600">
+                  <span>Lat: {formatLat(selectedTimestep.lat)}</span>
+                  <span>Lon: {formatLon(selectedTimestep.lon)}</span>
+                  <span>vor42: {selectedTimestep.vor42.toFixed(2)}</span>
+                  {selectedTimestep.Kz !== undefined && (
+                    <span className="text-blue-600">LEC data available</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => onTimestepSelect(null)}
+                  className="mt-1 text-xs text-orange-600 hover:text-orange-800 underline"
+                >
+                  Clear selection
+                </button>
+              </div>
+            )}
+
+            {lecCount > 0 && (
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-400">
+                <span className="flex items-center gap-1">
+                  <span className="font-bold">●</span> LEC original (3-hourly)
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="font-bold">○</span> LEC interpolated
+                </span>
               </div>
             )}
           </>

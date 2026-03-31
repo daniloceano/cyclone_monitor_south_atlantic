@@ -128,7 +128,7 @@ export default function HomePage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left sidebar ───────────────────────────────────────────────── */}
-        <aside className="w-72 xl:w-80 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden shadow-sm">
+        <aside className="w-80 xl:w-96 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden shadow-sm">
           <FilterPanel
             summaryData={summaryData!}
             filters={filters}
