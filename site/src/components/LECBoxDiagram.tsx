@@ -257,7 +257,7 @@ function DiagramView({
 
   return (
     <div className="flex flex-col items-center">
-      <p className="text-xs text-gray-500 mb-2 text-center">
+      <p className="text-xs text-gray-500 mb-3 text-center">
         {phaseLabel} ·{" "}
         <span className="text-blue-600">{averages.originalCount} original</span>
         {" / "}
@@ -266,155 +266,86 @@ function DiagramView({
       </p>
 
       {/*
-        LEC Box Diagram Layout (following reference figure):
+        LEC Box Diagram Layout (following reference figure style):
         
-        Layout uses a 5-column × 5-row grid:
+        Clean layout with boxes and external flux labels:
         
-               Col0       Col1         Col2         Col3       Col4
-        Row0:            Gz↓                       (RKz)       
-        Row1:  BAz→    [∂Az/∂t]  ——Cz→→    [∂Kz/∂t]      ←BKz
-        Row2:             ↓Ca               ↑Ck            
-        Row3:  BAe→    [∂Ae/∂t]  ——Ce→→    [∂Ke/∂t]      ←BKe
-        Row4:            Ge↑                       (RKe)
+                     Gz                          (RKz)
+                     ↓                             
+           BAz   [∂Az/∂t]  ——Cz——→  [∂Kz/∂t]   BKz
+                     |                  ↑
+                    Ca                 Ck
+                     ↓                  |
+           BAe   [∂Ae/∂t]  ——Ce——→  [∂Ke/∂t]   BKe
+                     ↑                             
+                     Ge                          (RKe)
         
-        Arrow directions shown are for POSITIVE values.
-        When value is negative, arrow direction reverses.
-        
-        Note: RKz and RKe are placeholders (data not available).
+        Boundary terms (BAz, BKz, etc.) shown as simple labels with values below.
       */}
-      <div className="grid grid-cols-5 gap-1 items-center justify-items-center"
-           style={{ gridTemplateRows: "auto auto auto auto auto" }}>
+      
+      <div className="flex flex-col items-center gap-1">
+        {/* ═══ Row 1: Top generation terms ═══ */}
+        <div className="flex items-end justify-center gap-8 mb-1">
+          <div className="w-16" /> {/* spacer for BAz */}
+          <ExternalTerm label="Gz" value={averages.Gz} color={LEC_COLORS.latentHeat} fmt={fmt} />
+          <div className="w-12" /> {/* spacer for Cz arrow */}
+          <ExternalTerm label="RKz" value={null} color={LEC_COLORS.boundary} fmt={fmt} />
+          <div className="w-16" /> {/* spacer for BKz */}
+        </div>
         
-        {/* ═══ Row 0: Generation terms entering from top ═══ */}
-        <div />
-        <FluxArrow
-          value={averages.Gz}
-          positiveDirection="down"
-          label="Gz"
-          semanticColor={LEC_COLORS.latentHeat}
-          fmt={fmt}
-          tooltip="Zonal APE generation (entering ∂Az/∂t from top)"
-        />
-        <div />
-        {/* RKz placeholder - data not available */}
-        <div className="text-[9px] text-gray-300 h-9 flex items-center">(RKz)</div>
-        <div />
+        {/* ═══ Arrow down from Gz ═══ */}
+        <div className="flex justify-center gap-8 -my-1">
+          <div className="w-16" />
+          <div className="text-lg" style={{ color: LEC_COLORS.latentHeat }}>↓</div>
+          <div className="w-12" />
+          <div className="w-10" />
+          <div className="w-16" />
+        </div>
 
-        {/* ═══ Row 1: ∂Az/∂t and ∂Kz/∂t reservoirs with boundary fluxes ═══ */}
-        <FluxArrow
-          value={averages.BAz}
-          positiveDirection="right"
-          label="BAz"
-          semanticColor={LEC_COLORS.boundary}
-          fmt={fmt}
-          tooltip="Az boundary flux (entering ∂Az/∂t from left)"
-        />
-        <TendencyBox
-          label="∂Az/∂t"
-          value={averages.Az}
-          color="#1e40af"
-          subtext="Zonal APE"
-          fmt={fmt}
-        />
-        <FluxArrow
-          value={averages.Cz}
-          positiveDirection="right"
-          label="Cz"
-          semanticColor={LEC_COLORS.latentHeat}
-          fmt={fmt}
-          tooltip="Cz: ∂Az/∂t → ∂Kz/∂t (positive = rightward)"
-        />
-        <TendencyBox
-          label="∂Kz/∂t"
-          value={averages.Kz}
-          color="#3b82f6"
-          subtext="Zonal KE"
-          fmt={fmt}
-        />
-        <FluxArrow
-          value={averages.BKz}
-          positiveDirection="left"
-          label="BKz"
-          semanticColor={LEC_COLORS.boundary}
-          fmt={fmt}
-          tooltip="Kz boundary flux (entering ∂Kz/∂t from right)"
-        />
+        {/* ═══ Row 2: ∂Az/∂t and ∂Kz/∂t with boundary fluxes ═══ */}
+        <div className="flex items-center justify-center gap-2">
+          <ExternalTerm label="BAz" value={averages.BAz} color={LEC_COLORS.boundary} fmt={fmt} arrow="→" />
+          <TendencyBox label="∂Az/∂t" value={averages.Az} color="#1e40af" subtext="Zonal APE" fmt={fmt} />
+          <ConversionArrow label="Cz" value={averages.Cz} color={LEC_COLORS.latentHeat} fmt={fmt} direction="horizontal" />
+          <TendencyBox label="∂Kz/∂t" value={averages.Kz} color="#3b82f6" subtext="Zonal KE" fmt={fmt} />
+          <ExternalTerm label="BKz" value={averages.BKz} color={LEC_COLORS.boundary} fmt={fmt} arrow="←" />
+        </div>
 
-        {/* ═══ Row 2: Vertical conversions Ca and Ck ═══ */}
-        <div />
-        <FluxArrow
-          value={averages.Ca}
-          positiveDirection="down"
-          label="Ca"
-          semanticColor={LEC_COLORS.baroclinic}
-          fmt={fmt}
-          tooltip="Ca: ∂Az/∂t → ∂Ae/∂t (positive = downward, baroclinic)"
-        />
-        <div />
-        <FluxArrow
-          value={averages.Ck}
-          positiveDirection="up"
-          label="Ck"
-          semanticColor={LEC_COLORS.barotropic}
-          fmt={fmt}
-          tooltip="Ck: ∂Ke/∂t → ∂Kz/∂t (positive = upward, barotropic)"
-        />
-        <div />
+        {/* ═══ Row 3: Vertical arrows Ca and Ck ═══ */}
+        <div className="flex items-center justify-center gap-2 -my-1">
+          <div className="w-16" /> {/* spacer for BAz */}
+          <ConversionArrow label="Ca" value={averages.Ca} color={LEC_COLORS.baroclinic} fmt={fmt} direction="vertical-down" />
+          <div className="w-12" /> {/* spacer between arrows */}
+          <ConversionArrow label="Ck" value={averages.Ck} color={LEC_COLORS.barotropic} fmt={fmt} direction="vertical-up" />
+          <div className="w-16" /> {/* spacer for BKz */}
+        </div>
 
-        {/* ═══ Row 3: ∂Ae/∂t and ∂Ke/∂t reservoirs with boundary fluxes ═══ */}
-        <FluxArrow
-          value={averages.BAe}
-          positiveDirection="right"
-          label="BAe"
-          semanticColor={LEC_COLORS.boundary}
-          fmt={fmt}
-          tooltip="Ae boundary flux (entering ∂Ae/∂t from left)"
-        />
-        <TendencyBox
-          label="∂Ae/∂t"
-          value={averages.Ae}
-          color="#dc2626"
-          subtext="Eddy APE"
-          fmt={fmt}
-        />
-        <FluxArrow
-          value={averages.Ce}
-          positiveDirection="right"
-          label="Ce"
-          semanticColor={LEC_COLORS.baroclinic}
-          fmt={fmt}
-          tooltip="Ce: ∂Ae/∂t → ∂Ke/∂t (positive = rightward, baroclinic)"
-        />
-        <TendencyBox
-          label="∂Ke/∂t"
-          value={averages.Ke}
-          color="#f97316"
-          subtext="Eddy KE"
-          fmt={fmt}
-        />
-        <FluxArrow
-          value={averages.BKe}
-          positiveDirection="left"
-          label="BKe"
-          semanticColor={LEC_COLORS.boundary}
-          fmt={fmt}
-          tooltip="Ke boundary flux (entering ∂Ke/∂t from right)"
-        />
+        {/* ═══ Row 4: ∂Ae/∂t and ∂Ke/∂t with boundary fluxes ═══ */}
+        <div className="flex items-center justify-center gap-2">
+          <ExternalTerm label="BAe" value={averages.BAe} color={LEC_COLORS.boundary} fmt={fmt} arrow="→" />
+          <TendencyBox label="∂Ae/∂t" value={averages.Ae} color="#dc2626" subtext="Eddy APE" fmt={fmt} />
+          <ConversionArrow label="Ce" value={averages.Ce} color={LEC_COLORS.baroclinic} fmt={fmt} direction="horizontal" />
+          <TendencyBox label="∂Ke/∂t" value={averages.Ke} color="#f97316" subtext="Eddy KE" fmt={fmt} />
+          <ExternalTerm label="BKe" value={averages.BKe} color={LEC_COLORS.boundary} fmt={fmt} arrow="←" />
+        </div>
+        
+        {/* ═══ Arrow up to Ge ═══ */}
+        <div className="flex justify-center gap-8 -my-1">
+          <div className="w-16" />
+          <div className="text-lg" style={{ color: LEC_COLORS.latentHeat }}>↑</div>
+          <div className="w-12" />
+          <div className="w-10" />
+          <div className="w-16" />
+        </div>
 
-        {/* ═══ Row 4: Generation terms entering from bottom ═══ */}
-        <div />
-        <FluxArrow
-          value={averages.Ge}
-          positiveDirection="up"
-          label="Ge"
-          semanticColor={LEC_COLORS.latentHeat}
-          fmt={fmt}
-          tooltip="Eddy APE generation (entering ∂Ae/∂t from bottom)"
-        />
-        <div />
-        {/* RKe placeholder - data not available */}
-        <div className="text-[9px] text-gray-300 h-9 flex items-center">(RKe)</div>
-        <div />
+        {/* ═══ Row 5: Bottom generation terms ═══ */}
+        <div className="flex items-start justify-center gap-8 mt-1">
+          <div className="w-16" />
+          <ExternalTerm label="Ge" value={averages.Ge} color={LEC_COLORS.latentHeat} fmt={fmt} />
+          <div className="w-12" />
+          <ExternalTerm label="RKe" value={null} color={LEC_COLORS.boundary} fmt={fmt} />
+          <div className="w-16" />
+        </div>
       </div>
 
       {/* ═══ Legend ═══ */}
@@ -442,81 +373,100 @@ function DiagramView({
   );
 }
 
-// ── Flux Arrow ─────────────────────────────────────────────────────────────────
+// ── External Term (boundary flux / generation) ─────────────────────────────────
 
 /**
- * Arrow component for LEC fluxes.
- *
- * The `positiveDirection` parameter defines which direction the arrow points
- * when the flux value is positive. When the value is negative, the arrow
- * reverses direction to indicate flow in the opposite sense.
- *
- * Color intensity scales with magnitude for visual emphasis.
+ * External flux term shown as a simple label with value below.
+ * Used for boundary fluxes (BAz, BAe, BKz, BKe) and generation terms (Gz, Ge).
  */
-function FluxArrow({
-  value,
-  positiveDirection,
+function ExternalTerm({
   label,
-  semanticColor,
+  value,
+  color,
   fmt,
-  tooltip,
+  arrow,
 }: {
-  value: number;
-  positiveDirection: "right" | "down" | "left" | "up";
   label: string;
-  semanticColor: string;
+  value: number | null;
+  color: string;
   fmt: (val: number, decimals?: number) => string;
-  tooltip?: string;
+  arrow?: "→" | "←";
 }) {
-  const isPositive = value >= 0;
-  const magnitude = Math.abs(value);
-  
-  // Scale arrow size based on magnitude (1-4 range)
-  const thickness = Math.min(4, Math.max(1, magnitude / 1.5));
-  
-  // Determine actual arrow direction based on sign
-  const oppositeDir: Record<string, string> = {
-    right: "left",
-    left: "right",
-    up: "down",
-    down: "up",
-  };
-  const actualDirection = isPositive ? positiveDirection : oppositeDir[positiveDirection];
-  
-  // Arrow symbols
-  const symbols: Record<string, string> = {
-    right: "→",
-    left: "←",
-    down: "↓",
-    up: "↑",
-  };
-  
-  // Dim color when value is very small
-  const opacity = magnitude < 0.1 ? 0.4 : magnitude < 0.5 ? 0.7 : 1;
-  const displayColor = semanticColor;
-  
-  const isVertical = actualDirection === "up" || actualDirection === "down";
+  const isPlaceholder = value === null;
   
   return (
-    <div
-      className={`flex ${isVertical ? "flex-col" : "flex-row"} items-center justify-center text-xs gap-0.5`}
-      title={tooltip}
-      style={{ minWidth: isVertical ? "auto" : "40px", minHeight: isVertical ? "36px" : "auto" }}
-    >
-      <span className="font-medium text-gray-600 text-[10px]">{label}</span>
-      <span
-        style={{
-          color: displayColor,
-          fontWeight: "bold",
-          fontSize: `${10 + thickness * 2}px`,
-          opacity,
-        }}
+    <div className="flex flex-col items-center w-16 text-center">
+      <div className="flex items-center gap-0.5">
+        {arrow && !isPlaceholder && (
+          <span style={{ color }} className="text-sm font-bold">{arrow}</span>
+        )}
+        <span 
+          className="text-[10px] font-semibold"
+          style={{ color: isPlaceholder ? "#d1d5db" : color }}
+        >
+          {label}
+        </span>
+      </div>
+      <span 
+        className="text-[10px]"
+        style={{ color: isPlaceholder ? "#d1d5db" : color }}
       >
-        {symbols[actualDirection]}
+        {isPlaceholder ? "(n/a)" : fmt(value)}
       </span>
-      <span style={{ color: displayColor, opacity }} className="text-[10px]">
-        {fmt(magnitude)}
-      </span>
+    </div>
+  );
+}
+
+// ── Conversion Arrow ───────────────────────────────────────────────────────────
+
+/**
+ * Arrow component for conversion terms (Cz, Ca, Ce, Ck).
+ * Shows label, arrow, and value in a compact format.
+ */
+function ConversionArrow({
+  label,
+  value,
+  color,
+  fmt,
+  direction,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  fmt: (val: number, decimals?: number) => string;
+  direction: "horizontal" | "vertical-down" | "vertical-up";
+}) {
+  const isPositive = value >= 0;
+  
+  // Determine arrow symbol based on direction and sign
+  const getArrow = () => {
+    if (direction === "horizontal") {
+      return isPositive ? "→" : "←";
+    } else if (direction === "vertical-down") {
+      return isPositive ? "↓" : "↑";
+    } else {
+      return isPositive ? "↑" : "↓";
+    }
+  };
+  
+  const isVertical = direction !== "horizontal";
+  
+  if (isVertical) {
+    return (
+      <div className="flex flex-col items-center w-16 py-1">
+        <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
+        <span className="text-base font-bold" style={{ color }}>{getArrow()}</span>
+        <span className="text-[10px]" style={{ color }}>{fmt(Math.abs(value))}</span>
+      </div>
+    );
+  }
+  
+  // Horizontal layout
+  return (
+    <div className="flex flex-col items-center w-12">
+      <span className="text-[10px] font-semibold" style={{ color }}>{label}</span>
+      <span className="text-base font-bold" style={{ color }}>{getArrow()}</span>
+      <span className="text-[10px]" style={{ color }}>{fmt(Math.abs(value))}</span>
     </div>
   );
 }
