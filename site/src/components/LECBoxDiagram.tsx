@@ -14,7 +14,8 @@ type LecTermKey =
   | "Az" | "Ae" | "Kz" | "Ke"
   | "Ca" | "Ce" | "Ck" | "Cz"
   | "BAz" | "BAe" | "BKz" | "BKe"
-  | "Gz" | "Ge";
+  | "Gz" | "Ge"
+  | "RGz" | "RGe" | "RKz" | "RKe";
 
 interface PhaseAverages extends Record<LecTermKey, number> {
   count: number;
@@ -64,6 +65,10 @@ function computeAverages(ts: Timestep[]): PhaseAverages | null {
     BKe: mean(valid.map((t) => t.BKe)),
     Gz:  mean(valid.map((t) => t.Gz)),
     Ge:  mean(valid.map((t) => t.Ge)),
+    RGz: mean(valid.map((t) => t.RGz)),
+    RGe: mean(valid.map((t) => t.RGe)),
+    RKz: mean(valid.map((t) => t.RKz)),
+    RKe: mean(valid.map((t) => t.RKe)),
     count: valid.length,
     originalCount,
   };
@@ -76,13 +81,13 @@ function computeAverages(ts: Timestep[]): PhaseAverages | null {
  *
  * Four-box representation of the Lorenz Energy Cycle showing energy tendencies:
  *
- *        Gz (≈RGz)               (RKz)
- *            ↓                     
+ *        Gz                       RKz
+ *            ↓                     ↓
  *   BAz → [∂Az/∂t]  — Cz →  [∂Kz/∂t] ← BKz
  *             ↓ Ca              ↑ Ck
  *   BAe → [∂Ae/∂t]  — Ce →  [∂Ke/∂t] ← BKe
- *            ↑                     
- *        Ge (≈RGe)               (RKe)
+ *            ↑                     ↑
+ *        Ge                       RKe
  *
  * Diagram geometry follows the reference figure provided for positive flow directions.
  * All arrow directions represent the POSITIVE sense of each flux.
@@ -100,9 +105,10 @@ function computeAverages(ts: Timestep[]): PhaseAverages | null {
  *   - BKe: entering ∂Ke/∂t from right
  *
  * Generation/Residual terms:
- *   - Gz (≈RGz): entering ∂Az/∂t from top
- *   - Ge (≈RGe): entering ∂Ae/∂t from bottom
- *   - RKz, RKe: placeholders (data not available)
+ *   - Gz: Generation of zonal APE (entering ∂Az/∂t from top)
+ *   - Ge: Generation of eddy APE (entering ∂Ae/∂t from bottom)
+ *   - RKz: Residual of zonal KE dissipation (entering ∂Kz/∂t from top)
+ *   - RKe: Residual of eddy KE dissipation (entering ∂Ke/∂t from bottom)
  *
  * Color semantics:
  *   - Purple: baroclinic chain (Ca, Ce)
@@ -310,14 +316,14 @@ function DiagramView({
         <div />
         <ExternalTerm label="Gz" value={averages.Gz} color={LEC_COLORS.latentHeat} fmt={fmt} />
         <div />
-        <ExternalTerm label="RKz" value={null} color={LEC_COLORS.boundary} fmt={fmt} />
+        <ExternalTerm label="RKz" value={averages.RKz} color={LEC_COLORS.boundary} fmt={fmt} />
         <div />
 
-        {/* ═══ Row 1: Arrows from Gz ═══ */}
+        {/* ═══ Row 1: Arrows from Gz and RKz ═══ */}
         <div />
         <div className="text-base" style={{ color: LEC_COLORS.latentHeat }}>↓</div>
         <div />
-        <div />
+        <div className="text-base" style={{ color: LEC_COLORS.boundary }}>↓</div>
         <div />
 
         {/* ═══ Row 2: ∂Az/∂t and ∂Kz/∂t with boundary fluxes ═══ */}
@@ -341,18 +347,18 @@ function DiagramView({
         <TendencyBox label="∂Ke/∂t" value={averages.Ke} color="#f97316" subtext="Eddy KE" fmt={fmt} />
         <ExternalTerm label="BKe" value={averages.BKe} color={LEC_COLORS.boundary} fmt={fmt} arrow="←" />
 
-        {/* ═══ Row 5: Arrows to Ge ═══ */}
+        {/* ═══ Row 5: Arrows to Ge and from RKe ═══ */}
         <div />
         <div className="text-base" style={{ color: LEC_COLORS.latentHeat }}>↑</div>
         <div />
-        <div />
+        <div className="text-base" style={{ color: LEC_COLORS.boundary }}>↑</div>
         <div />
 
         {/* ═══ Row 6: Bottom generation terms (Ge, RKe) ═══ */}
         <div />
         <ExternalTerm label="Ge" value={averages.Ge} color={LEC_COLORS.latentHeat} fmt={fmt} />
         <div />
-        <ExternalTerm label="RKe" value={null} color={LEC_COLORS.boundary} fmt={fmt} />
+        <ExternalTerm label="RKe" value={averages.RKe} color={LEC_COLORS.boundary} fmt={fmt} />
         <div />
       </div>
 
@@ -542,6 +548,15 @@ const TABLE_GROUPS: { header: string; terms: { key: LecTermKey; label: string; d
     terms: [
       { key: "Gz",  label: "Gz",  desc: "Entering ∂Az/∂t from top" },
       { key: "Ge",  label: "Ge",  desc: "Entering ∂Ae/∂t from bottom"  },
+    ],
+  },
+  {
+    header: "Residuals (W m⁻²)",
+    terms: [
+      { key: "RGz", label: "RGz", desc: "Zonal APE generation residual" },
+      { key: "RGe", label: "RGe", desc: "Eddy APE generation residual" },
+      { key: "RKz", label: "RKz", desc: "Zonal KE dissipation residual" },
+      { key: "RKe", label: "RKe", desc: "Eddy KE dissipation residual" },
     ],
   },
 ];

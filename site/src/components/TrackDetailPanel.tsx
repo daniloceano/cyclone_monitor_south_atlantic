@@ -337,6 +337,12 @@ function TimestepDetail({ ts }: { ts: Timestep }) {
             <InfoRow label="BAe — Ae boundary" value={fW(ts.BAe)} />
             <InfoRow label="BKz — Kz boundary" value={fW(ts.BKz)} />
             <InfoRow label="BKe — Ke boundary" value={fW(ts.BKe)} />
+            {/* Residual terms (W m⁻²) */}
+            <p className="text-xs text-gray-400 font-medium mt-1.5">Residuals (W m⁻²)</p>
+            <InfoRow label="RGz — Zonal APE res." value={fW(ts.RGz)} />
+            <InfoRow label="RGe — Eddy APE res."  value={fW(ts.RGe)} />
+            <InfoRow label="RKz — Zonal KE res."  value={fW(ts.RKz)} />
+            <InfoRow label="RKe — Eddy KE res."   value={fW(ts.RKe)} />
           </div>
         ) : (
           <p className="text-xs text-gray-400 italic">

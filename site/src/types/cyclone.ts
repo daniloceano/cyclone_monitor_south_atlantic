@@ -110,6 +110,14 @@ export interface Timestep {
   Gz?: number;
   /** Generation of eddy APE (W m⁻²). */
   Ge?: number;
+  /** Residual of zonal APE generation (W m⁻²). RGz = ∂Az/∂t - Gz + Cz + Ca - BAz */
+  RGz?: number;
+  /** Residual of eddy APE generation (W m⁻²). RGe = ∂Ae/∂t - Ge - Ca + Ce - BAe */
+  RGe?: number;
+  /** Residual of zonal KE dissipation (W m⁻²). RKz = ∂Kz/∂t - Cz + Ck - BKz */
+  RKz?: number;
+  /** Residual of eddy KE dissipation (W m⁻²). RKe = ∂Ke/∂t - Ce - Ck - BKe */
+  RKe?: number;
   /**
    * True  = LEC value is from the original 3-hourly computation.
    * False = LEC value was linearly interpolated from adjacent 3-hourly values.

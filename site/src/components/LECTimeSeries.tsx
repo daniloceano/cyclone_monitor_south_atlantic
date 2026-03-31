@@ -19,15 +19,17 @@ interface LECTimeSeriesProps {
   showReservoirs?: boolean;
   showConversions?: boolean;
   showBoundaries?: boolean;
+  showResiduals?: boolean;
 }
 
 /**
  * LEC Time Series Chart
  *
- * Three optional panels:
+ * Four optional panels:
  *   1. Energy Reservoirs: Az, Ae, Kz, Ke  (×10⁵ J m⁻²)
  *   2. Energy Conversions & Generation: Ca, Ce, Ck, Cz, Gz, Ge  (W m⁻²)
  *   3. Boundary Fluxes: BAz, BAe, BKz, BKe  (W m⁻²)
+ *   4. Residuals: RGz, RGe, RKz, RKe  (W m⁻²)
  *
  * Colour palette (grouping: Zonal APE = #b1cff2, Eddy APE = #ccd3bf,
  *                            Zonal KE  = #fad99b, Eddy KE  = #ea9393,
@@ -40,6 +42,7 @@ export default function LECTimeSeries({
   showReservoirs = true,
   showConversions = true,
   showBoundaries = true,
+  showResiduals = true,
 }: LECTimeSeriesProps) {
   // Colour palette — grouped by energy reservoir affinity
   const C = {
@@ -60,6 +63,11 @@ export default function LECTimeSeries({
     // Generation
     Gz:  "#b566f3",
     Ge:  "#a66e5b",
+    // Residuals
+    RGz: "#7c3aed",  // Purple (APE generation residual)
+    RGe: "#6d4c41",  // Brown (APE generation residual)
+    RKz: "#0ea5e9",  // Sky blue (KE dissipation residual)
+    RKe: "#f97316",  // Orange (KE dissipation residual)
   };
 
   const chartData = timesteps.map((ts, idx) => ({
@@ -87,6 +95,11 @@ export default function LECTimeSeries({
     BAe: ts.BAe,
     BKz: ts.BKz,
     BKe: ts.BKe,
+    // Residuals (W m⁻²)
+    RGz: ts.RGz,
+    RGe: ts.RGe,
+    RKz: ts.RKz,
+    RKe: ts.RKe,
   }));
 
   const hasLECData = chartData.some((d) => d.Az != null || d.Ca != null);
@@ -190,6 +203,31 @@ export default function LECTimeSeries({
                 <Line type="monotone" dataKey="BAe" stroke={C.BAe} strokeWidth={2} dot={false} name="BAe (Ae boundary)" connectNulls />
                 <Line type="monotone" dataKey="BKz" stroke={C.BKz} strokeWidth={2} dot={false} name="BKz (Kz boundary)" connectNulls />
                 <Line type="monotone" dataKey="BKe" stroke={C.BKe} strokeWidth={2} dot={false} name="BKe (Ke boundary)" connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. Residuals ─────────────────────────────────────────────────── */}
+      {showResiduals && (
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">
+            Residuals (W m⁻²)
+          </h4>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                {commonXAxis}
+                <YAxis tick={{ fontSize: 10 }} width={40} />
+                <ReferenceLine y={0} stroke="#666" strokeDasharray="3 3" />
+                {commonTooltip}
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="RGz" stroke={C.RGz} strokeWidth={2} dot={false} name="RGz (Zonal APE res.)" connectNulls />
+                <Line type="monotone" dataKey="RGe" stroke={C.RGe} strokeWidth={2} dot={false} name="RGe (Eddy APE res.)" connectNulls />
+                <Line type="monotone" dataKey="RKz" stroke={C.RKz} strokeWidth={2} dot={false} name="RKz (Zonal KE res.)" connectNulls />
+                <Line type="monotone" dataKey="RKe" stroke={C.RKe} strokeWidth={2} dot={false} name="RKe (Eddy KE res.)" connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>

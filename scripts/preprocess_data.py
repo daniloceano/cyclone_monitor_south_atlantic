@@ -302,7 +302,8 @@ def main():
             # Include all available energetics columns
             has_lec = False
             for col in ["Az", "Ae", "Kz", "Ke", "Cz", "Ca", "Ck", "Ce",
-                       "BAz", "BAe", "BKz", "BKe", "Gz", "Ge"]:
+                       "BAz", "BAe", "BKz", "BKe", "Gz", "Ge",
+                       "RGz", "RGe", "RKz", "RKe"]:
                 v = safe_float(row.get(col), ENERGETICS_DECIMALS)
                 if v is not None:
                     ts[col] = v
