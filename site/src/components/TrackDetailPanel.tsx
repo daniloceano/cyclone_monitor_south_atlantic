@@ -295,13 +295,11 @@ export default function TrackDetailPanel({
 // ── Timestep detail card ───────────────────────────────────────────────────────
 function TimestepDetail({ ts }: { ts: Timestep }) {
   const hasEnergetics =
-    ts.Kz  !== undefined ||
-    ts.Ke  !== undefined ||
-    ts.Ck  !== undefined ||
-    ts.Ca  !== undefined ||
-    ts.BAe !== undefined ||
-    ts.BKe !== undefined ||
-    ts.Ge  !== undefined;
+    ts.Az  !== undefined || ts.Ae  !== undefined ||
+    ts.Kz  !== undefined || ts.Ke  !== undefined;
+
+  const fJ  = (v: number | undefined) => v !== undefined ? `${v.toFixed(0)} J m⁻²` : "—";
+  const fW  = (v: number | undefined) => v !== undefined ? `${v.toFixed(3)} W m⁻²` : "—";
 
   return (
     <div className="bg-white border border-orange-200 rounded-lg p-2.5 space-y-1.5 shadow-sm">
@@ -324,17 +322,28 @@ function TimestepDetail({ ts }: { ts: Timestep }) {
 
         {hasEnergetics ? (
           <div className="space-y-1">
-            {/* Energy reservoirs */}
-            <p className="text-xs text-gray-400 font-medium mt-1">Energy reservoirs</p>
-            <InfoRow label="Kz — Zonal KE"  value={ts.Kz  !== undefined ? `${ts.Kz.toFixed(0)} J m⁻²` : "—"} />
-            <InfoRow label="Ke — Eddy KE"   value={ts.Ke  !== undefined ? `${ts.Ke.toFixed(0)} J m⁻²` : "—"} />
-            {/* Conversion & generation terms */}
-            <p className="text-xs text-gray-400 font-medium mt-1.5">Conversion & generation</p>
-            <InfoRow label="Ck — Ke→Kz (+)"  value={ts.Ck  !== undefined ? `${ts.Ck.toFixed(3)} W m⁻²` : "—"} />
-            <InfoRow label="Ca — Az→Ae"      value={ts.Ca  !== undefined ? `${ts.Ca.toFixed(3)} W m⁻²` : "—"} />
-            <InfoRow label="BAe — Ae boundary" value={ts.BAe !== undefined ? `${ts.BAe.toFixed(3)} W m⁻²` : "—"} />
-            <InfoRow label="BKe — Ke boundary" value={ts.BKe !== undefined ? `${ts.BKe.toFixed(3)} W m⁻²` : "—"} />
-            <InfoRow label="Ge — Eddy APE gen." value={ts.Ge  !== undefined ? `${ts.Ge.toFixed(3)} W m⁻²` : "—"} />
+            {/* Energy reservoirs (J m⁻²) */}
+            <p className="text-xs text-gray-400 font-medium mt-1">Energy reservoirs (J m⁻²)</p>
+            <InfoRow label="Az — Zonal APE"  value={fJ(ts.Az)} />
+            <InfoRow label="Ae — Eddy APE"   value={fJ(ts.Ae)} />
+            <InfoRow label="Kz — Zonal KE"   value={fJ(ts.Kz)} />
+            <InfoRow label="Ke — Eddy KE"    value={fJ(ts.Ke)} />
+            {/* Conversion terms (W m⁻²) */}
+            <p className="text-xs text-gray-400 font-medium mt-1.5">Conversions (W m⁻²)</p>
+            <InfoRow label="Ca — Az→Ae"      value={fW(ts.Ca)} />
+            <InfoRow label="Ce — Ae→Ke"      value={fW(ts.Ce)} />
+            <InfoRow label="Ck — Ke→Kz (+)"  value={fW(ts.Ck)} />
+            <InfoRow label="Cz — Az→Kz"      value={fW(ts.Cz)} />
+            {/* Generation terms (W m⁻²) */}
+            <p className="text-xs text-gray-400 font-medium mt-1.5">Generation (W m⁻²)</p>
+            <InfoRow label="Gz — Zonal APE gen." value={fW(ts.Gz)} />
+            <InfoRow label="Ge — Eddy APE gen."  value={fW(ts.Ge)} />
+            {/* Boundary fluxes (W m⁻²) */}
+            <p className="text-xs text-gray-400 font-medium mt-1.5">Boundary fluxes (W m⁻²)</p>
+            <InfoRow label="BAz — Az boundary" value={fW(ts.BAz)} />
+            <InfoRow label="BAe — Ae boundary" value={fW(ts.BAe)} />
+            <InfoRow label="BKz — Kz boundary" value={fW(ts.BKz)} />
+            <InfoRow label="BKe — Ke boundary" value={fW(ts.BKe)} />
           </div>
         ) : (
           <p className="text-xs text-gray-400 italic">

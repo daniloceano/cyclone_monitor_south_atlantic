@@ -167,11 +167,11 @@ export const MONTH_NAMES = [
  * Palette chosen to match the colours in that publication's lifecycle diagrams.
  */
 export const PHASE_COLORS: Record<string, string> = {
-  incipient:       "#5B9BD5",   // steel blue
-  intensification: "#ED7D31",   // orange
-  mature:          "#843C0C",   // dark brown-orange
-  decay:           "#70AD47",   // medium green
-  dissipation:     "#7F7F7F",   // neutral gray
+  incipient:       "#b1cff2",
+  intensification: "#fad99b",
+  mature:          "#ea9393",
+  decay:           "#ccd3bf",
+  dissipation:     "#9e9e9e",   // gray for residual/dissipation
 };
 
 export const PHASE_LABELS: Record<string, string> = {
