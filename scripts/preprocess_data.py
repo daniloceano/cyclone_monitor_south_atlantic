@@ -219,11 +219,13 @@ def main():
     print("  Computing intensity quantile thresholds …")
     track_max = df.groupby("track_id")["vor42"].max()
     thresholds = {
+        "p10": float(track_max.quantile(0.10)),
         "p25": float(track_max.quantile(0.25)),
         "p50": float(track_max.quantile(0.50)),
         "p75": float(track_max.quantile(0.75)),
         "p90": float(track_max.quantile(0.90)),
         "p95": float(track_max.quantile(0.95)),
+        "max": float(track_max.max()),
     }
     print(f"  vor42 thresholds: { {k: round(v,3) for k,v in thresholds.items()} }")
 

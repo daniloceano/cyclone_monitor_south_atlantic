@@ -36,13 +36,19 @@ export interface TrackSummary {
   coords: [number, number][];
 }
 
-/** Quantile thresholds for max_vor42 across all tracks. */
+/** Quantile thresholds for max_vor42 across all tracks (global, dataset-level).
+ *  Used for intensity-based track coloring and classification.
+ *  - p10: 10th percentile — tracks below this are shown in gray
+ *  - p10–max range: used for yellow→orange→red gradient
+ */
 export interface QuantileThresholds {
+  p10: number;
   p25: number;
   p50: number;
   p75: number;
   p90: number;
   p95: number;
+  max: number;
 }
 
 /** Root structure of public/data/summary.json. */
@@ -189,3 +195,74 @@ export const PHASE_LABELS: Record<string, string> = {
   decay:           "Decay",
   dissipation:     "Dissipation",
 };
+
+// ─── Wind100 types ────────────────────────────────────────────────────────────
+// These types mirror the JSON produced by scripts/generate_wind100_json.py.
+// Source dataset: Zenodo DOI 10.5281/zenodo.19353037
+//
+// Physical meaning:
+//   wind100_max = absolute maximum 100 m wind within each Lagrangian quadrant
+//   wind100_p99 = 99th-percentile 100 m wind within each Lagrangian quadrant
+//
+// Quadrant convention (relative to cyclone centre, defined by 850 hPa vor42):
+//   NW | NE
+//   ---+---
+//   SW | SE
+
+/**
+ * One quadrant entry: [lon, lat, val, dist].
+ * Index 0: longitude of the wind extremum (°)
+ * Index 1: latitude of the wind extremum (°)
+ * Index 2: wind speed at 100 m (m s⁻¹)
+ * Index 3: angular distance from wind point to cyclone centre (°)
+ */
+export type Wind100QArray = [number, number, number, number];
+
+/**
+ * One metric (max or p99) at one timestep.
+ * Each quadrant is null when no data is available.
+ * gq = quadrant with the global timestep extremum ("NW" | "NE" | "SW" | "SE").
+ */
+export interface Wind100MetricEntry {
+  NW: Wind100QArray | null;
+  NE: Wind100QArray | null;
+  SW: Wind100QArray | null;
+  SE: Wind100QArray | null;
+  gq: string | null;
+}
+
+/** Combined wind100 record for one timestep (both metrics). */
+export interface Wind100TimestepEntry {
+  max: Wind100MetricEntry | null;
+  p99: Wind100MetricEntry | null;
+}
+
+/**
+ * Per-year wind100 data, mirroring the structure of details/{year}.json.
+ * tracks[String(trackId)][isoDate] = Wind100TimestepEntry
+ */
+export interface Wind100YearData {
+  year: number;
+  tracks: Record<string, Record<string, Wind100TimestepEntry>>;
+}
+
+/**
+ * Global statistics from site/public/data/wind100/meta.json.
+ * Used for consistent color-scale normalization across the entire dataset.
+ */
+export interface Wind100Meta {
+  /** Absolute maximum of all wind100_max values across all tracks (m s⁻¹). */
+  max_global_max: number;
+  /** Absolute maximum of all wind100_p99 values (m s⁻¹). */
+  p99_global_max: number;
+  /** 95th-percentile of all wind100_max values (informational). */
+  max_global_p95: number;
+  /** 95th-percentile of all wind100_p99 values (informational). */
+  p99_global_p95: number;
+  years: number[];
+  total_tracks: number;
+  generated: string;
+}
+
+/** Metric selector for the wind100 visualization. */
+export type Wind100Metric = "max" | "p99";

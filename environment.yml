@@ -1,0 +1,28 @@
+name: cyclone_monitor
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas>=2.0
+  - numpy>=1.24
+  - pyarrow>=14.0
+  # Web app JSON generation
+  # (no extra dependencies beyond pandas/numpy)
+
+# ─── Notes ────────────────────────────────────────────────────────────────────
+# This environment supports:
+#   - scripts/data/preprocess_data.py  (pandas, numpy)
+#   - scripts/data/merge_wind100.py    (pandas, numpy, pyarrow)
+#   - scripts/preprocess_data.py       (pandas, numpy)
+#
+# Create: conda env create -f environment.yml
+# Activate: conda activate cyclone_monitor
+#
+# To run the wind100 merge pipeline:
+#   conda activate cyclone_monitor
+#   python scripts/data/run_pipeline.py --skip-download --wind100
+#
+# Alternatively, use the existing 'data' conda environment which already
+# has pandas 2.2.2 and pyarrow 17.0.0 installed:
+#   conda run -n data python scripts/data/merge_wind100.py

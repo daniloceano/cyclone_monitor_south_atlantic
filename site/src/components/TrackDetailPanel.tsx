@@ -1,7 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { TrackSummary, Timestep, QuantileThresholds, PHASE_COLORS, PHASE_LABELS } from "@/types/cyclone";
+import {
+  TrackSummary,
+  Timestep,
+  QuantileThresholds,
+  PHASE_COLORS,
+  PHASE_LABELS,
+  Wind100TimestepEntry,
+  Wind100Meta,
+  Wind100Metric,
+  Wind100QArray,
+} from "@/types/cyclone";
 import {
   formatDatetime,
   formatLat,
@@ -9,6 +19,8 @@ import {
   formatVor42,
   formatDuration,
   monthName,
+  getWindColor,
+  STORM_ALERT_PALETTE,
 } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
@@ -25,7 +37,14 @@ interface TrackDetailPanelProps {
   loading: boolean;
   error: string | null;
   quantileThresholds: QuantileThresholds;
+  // Wind100 data for this track (keyed by ISO timestamp)
+  wind100TrackData: Record<string, Wind100TimestepEntry> | null;
+  wind100Meta: Wind100Meta | null;
+  wind100Metric: Wind100Metric;
+  onWind100MetricChange: (m: Wind100Metric) => void;
 }
+
+const QUADRANT_KEYS = ["NW", "NE", "SW", "SE"] as const;
 
 export default function TrackDetailPanel({
   track,
@@ -36,6 +55,10 @@ export default function TrackDetailPanel({
   loading,
   error,
   quantileThresholds: _qt,
+  wind100TrackData,
+  wind100Meta,
+  wind100Metric,
+  onWind100MetricChange,
 }: TrackDetailPanelProps) {
   const trackIdStr = String(track.id);
   const [showLECCharts, setShowLECCharts] = useState(false);
@@ -43,6 +66,12 @@ export default function TrackDetailPanel({
 
   // Count timesteps that carry LEC data
   const lecCount = timesteps?.filter((t) => t.Kz !== undefined).length ?? 0;
+
+  // Resolve wind100 entry for the selected timestep
+  const w100Entry =
+    selectedTimestep && wind100TrackData
+      ? (wind100TrackData[selectedTimestep.date] ?? null)
+      : null;
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden border-t border-gray-200">
@@ -136,7 +165,7 @@ export default function TrackDetailPanel({
                 </span>
               )}
             </p>
-            
+
             {/* Dropdown selector */}
             <div className="relative">
               <select
@@ -219,6 +248,17 @@ export default function TrackDetailPanel({
           </>
         )}
 
+        {/* ── Wind100 Section ────────────────────────────────────────────── */}
+        {timesteps && !loading && wind100Meta && (
+          <Wind100Section
+            selectedTimestep={selectedTimestep}
+            w100Entry={w100Entry}
+            wind100Meta={wind100Meta}
+            wind100Metric={wind100Metric}
+            onMetricChange={onWind100MetricChange}
+          />
+        )}
+
         {/* ── LEC Charts Section ─────────────────────────────────────────── */}
         {timesteps && lecCount > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
@@ -233,7 +273,7 @@ export default function TrackDetailPanel({
                 {showLECCharts ? "▲ Hide" : "▼ Show"}
               </span>
             </button>
-            
+
             {showLECCharts && (
               <div className="px-3 pb-3 space-y-3">
                 {/* Tab selector */}
@@ -259,7 +299,7 @@ export default function TrackDetailPanel({
                     Energy Box Diagram
                   </button>
                 </div>
-                
+
                 {/* Chart content */}
                 <div className="bg-white rounded-lg p-2 border border-blue-100">
                   {lecTab === "timeseries" ? (
@@ -268,9 +308,9 @@ export default function TrackDetailPanel({
                     <LECBoxDiagram timesteps={timesteps} />
                   )}
                 </div>
-                
+
                 <p className="text-xs text-blue-600 leading-tight">
-                  LEC data from De Souza et al. (2025). Original 3-hourly resolution 
+                  LEC data from De Souza et al. (2025). Original 3-hourly resolution
                   interpolated to 1-hourly. See About page for methodology.
                 </p>
               </div>
@@ -281,6 +321,181 @@ export default function TrackDetailPanel({
         {/* ── Selected timestep detail ──────────────────────────────────── */}
         {selectedTimestep && <TimestepDetail ts={selectedTimestep} />}
       </div>
+    </div>
+  );
+}
+
+// ── Wind100 section ────────────────────────────────────────────────────────────
+
+interface Wind100SectionProps {
+  selectedTimestep: Timestep | null;
+  w100Entry: Wind100TimestepEntry | null;
+  wind100Meta: Wind100Meta;
+  wind100Metric: Wind100Metric;
+  onMetricChange: (m: Wind100Metric) => void;
+}
+
+function Wind100Section({
+  selectedTimestep,
+  w100Entry,
+  wind100Meta,
+  wind100Metric,
+  onMetricChange,
+}: Wind100SectionProps) {
+  const metricData = w100Entry
+    ? wind100Metric === "max" ? w100Entry.max : w100Entry.p99
+    : null;
+  const globalMax = wind100Metric === "max"
+    ? wind100Meta.max_global_max
+    : wind100Meta.p99_global_max;
+
+  return (
+    <div className="bg-emerald-50 border border-emerald-200 rounded-lg overflow-hidden">
+      {/* Header row */}
+      <div className="flex items-center justify-between px-3 py-2 bg-emerald-50 border-b border-emerald-100">
+        <span className="text-xs font-semibold text-emerald-800">
+          🌬️ Wind 100 m
+        </span>
+
+        {/* Metric toggle */}
+        <div className="flex gap-0.5 bg-white border border-emerald-200 rounded-md p-0.5">
+          <button
+            onClick={() => onMetricChange("max")}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition ${
+              wind100Metric === "max"
+                ? "bg-emerald-600 text-white"
+                : "text-emerald-700 hover:bg-emerald-50"
+            }`}
+          >
+            MAX
+          </button>
+          <button
+            onClick={() => onMetricChange("p99")}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition ${
+              wind100Metric === "p99"
+                ? "bg-emerald-600 text-white"
+                : "text-emerald-700 hover:bg-emerald-50"
+            }`}
+          >
+            P99
+          </button>
+        </div>
+      </div>
+
+      <div className="px-3 py-2 space-y-2">
+        {/* Metric description */}
+        <p className="text-[10px] text-emerald-700 leading-tight">
+          {wind100Metric === "max"
+            ? "Absolute maximum 100 m wind speed per quadrant (ERA5, Lagrangian)."
+            : "99th-percentile 100 m wind speed per quadrant (ERA5, Lagrangian)."}
+        </p>
+
+        {!selectedTimestep ? (
+          <p className="text-xs text-gray-400 italic py-1">
+            Select a timestep to see wind100 data on the map and here.
+          </p>
+        ) : !w100Entry || (w100Entry.max === null && w100Entry.p99 === null) ? (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            No wind100 data for this timestep.
+          </p>
+        ) : !metricData ? (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            No {wind100Metric === "max" ? "max" : "P99"} data at this timestep.
+          </p>
+        ) : (
+          <>
+            {/* Quadrant grid */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {QUADRANT_KEYS.map((qd) => {
+                const q: Wind100QArray | null = metricData[qd];
+                const isGlobal = metricData.gq === qd;
+                if (!q) {
+                  return (
+                    <div key={qd} className="bg-white border border-gray-200 rounded-md px-2 py-1.5 opacity-50">
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <span className="text-[10px] font-bold text-gray-500">{qd}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400">—</span>
+                    </div>
+                  );
+                }
+                const [qLon, qLat, qVal, qDist] = q;
+                const color = getWindColor(qVal, globalMax);
+                return (
+                  <div
+                    key={qd}
+                    className={`bg-white rounded-md px-2 py-1.5 border ${
+                      isGlobal ? "border-emerald-400 ring-1 ring-emerald-300" : "border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: color, border: "1px solid #e5e7eb" }}
+                      />
+                      <span className="text-[10px] font-bold text-gray-700">{qd}</span>
+                      {isGlobal && (
+                        <span className="text-[9px] text-emerald-600 font-semibold">★</span>
+                      )}
+                    </div>
+                    <div className="text-[11px] font-semibold text-gray-900">
+                      {qVal.toFixed(2)} <span className="text-[9px] font-normal text-gray-500">m s⁻¹</span>
+                    </div>
+                    {qDist != null && (
+                      <div className="text-[9px] text-gray-500">dist: {qDist.toFixed(2)}°</div>
+                    )}
+                    {qLon != null && qLat != null && (
+                      <div className="text-[9px] text-gray-400 leading-tight">
+                        Δ{(qLon - (selectedTimestep?.lon ?? 0)).toFixed(2)}°, Δ{(qLat - (selectedTimestep?.lat ?? 0)).toFixed(2)}°
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Global quad note */}
+            {metricData.gq && (
+              <p className="text-[10px] text-gray-500 leading-tight">
+                ★ Global maximum in <span className="font-semibold text-emerald-700">{metricData.gq}</span> quadrant.
+                &ensp;Scale max: {globalMax.toFixed(1)} m s⁻¹ (dataset-wide).
+              </p>
+            )}
+
+            {/* Mini color scale */}
+            <MiniColorScale globalMax={globalMax} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Mini color scale for the panel ────────────────────────────────────────────
+
+function MiniColorScale({ globalMax }: { globalMax: number }) {
+  const steps = 5;
+  const gradientStops = STORM_ALERT_PALETTE.map(
+    (c, i) => `${c} ${((i / (STORM_ALERT_PALETTE.length - 1)) * 100).toFixed(0)}%`
+  ).join(", ");
+
+  return (
+    <div className="mt-1">
+      <div
+        className="h-2 rounded-sm"
+        style={{ background: `linear-gradient(to right, ${gradientStops})` }}
+      />
+      <div className="flex justify-between mt-0.5">
+        {Array.from({ length: steps }, (_, i) => {
+          const v = (i / (steps - 1)) * globalMax;
+          return (
+            <span key={i} className="text-[9px] text-gray-400 leading-none">
+              {v.toFixed(0)}
+            </span>
+          );
+        })}
+      </div>
+      <p className="text-[9px] text-gray-400 text-right mt-0.5">m s⁻¹</p>
     </div>
   );
 }

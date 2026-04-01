@@ -25,6 +25,7 @@ src/
 │   ├── Header.tsx          # App header with navigation
 │   └── TrackDetailPanel.tsx # Selected track details
 ├── lib/                    # Utilities
+│   ├── colors.ts           # Intensity-based color functions
 │   ├── dataLoader.ts       # JSON data fetching
 │   ├── filters.ts          # Filter logic
 │   └── utils.ts            # Formatting helpers
@@ -46,6 +47,25 @@ src/
 - **FilterPanel**: Multi-select filters for year, month, and genesis region
 - **TrackDetailPanel**: Shows track metadata, timestep list, and LEC diagnostics
 - **Header**: Navigation links, track count, logout button
+
+## Intensity-Based Track Coloring
+
+When no cyclone is selected, track colors reflect intensity using `max_vor42` 
+(maximum filtered relative vorticity, ×10⁻⁵ s⁻¹):
+
+| Intensity | Color | Description |
+|-----------|-------|-------------|
+| Below p10 | Gray (#9ca3af) | Low-intensity cyclones (bottom 10%) |
+| p10 → mid | Yellow → Orange | Moderate intensity |
+| mid → max | Orange → Red | High intensity |
+
+**Key details:**
+- **Variable**: `max_vor42` — maximum vor42 across all timesteps of the track
+- **Percentile calculation**: Track-level (one value per cyclone), not timestep-level
+- **Scale**: Global across entire dataset (6,789 tracks), not dynamically recalculated for filtered subsets
+- **Thresholds**: Pre-computed in `scripts/preprocess_data.py`, stored in `summary.json`
+
+When a track is **selected**, only that track is highlighted (orange) and all others are dimmed (light blue).
 
 ## Data Flow
 

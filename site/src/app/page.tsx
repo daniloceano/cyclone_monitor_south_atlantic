@@ -3,8 +3,24 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
 
-import { TrackSummary, Timestep, FilterState, SummaryData, EMPTY_FILTERS } from "@/types/cyclone";
-import { loadSummary, loadYearDetails, getTrackDetail } from "@/lib/dataLoader";
+import {
+  TrackSummary,
+  Timestep,
+  FilterState,
+  SummaryData,
+  EMPTY_FILTERS,
+  Wind100YearData,
+  Wind100Meta,
+  Wind100Metric,
+  Wind100TimestepEntry,
+} from "@/types/cyclone";
+import {
+  loadSummary,
+  loadYearDetails,
+  getTrackDetail,
+  loadWind100Meta,
+  loadWind100Year,
+} from "@/lib/dataLoader";
 import { filterTracks } from "@/lib/filters";
 
 import FilterPanel from "@/components/FilterPanel";
@@ -37,11 +53,17 @@ export default function HomePage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  // ── Load summary on mount ──────────────────────────────────────────────────
+  // ── Wind100 state ──────────────────────────────────────────────────────────
+  const [wind100Meta, setWind100Meta] = useState<Wind100Meta | null>(null);
+  const [wind100YearData, setWind100YearData] = useState<Wind100YearData | null>(null);
+  const [wind100Metric, setWind100Metric] = useState<Wind100Metric>("max");
+
+  // ── Load summary + wind100 meta on mount ───────────────────────────────────
   useEffect(() => {
-    loadSummary()
-      .then((data) => {
+    Promise.all([loadSummary(), loadWind100Meta()])
+      .then(([data, meta]) => {
         setSummaryData(data);
+        setWind100Meta(meta); // null-safe: meta is null if file absent
         setInitialLoading(false);
       })
       .catch((err: Error) => {
@@ -56,6 +78,12 @@ export default function HomePage() {
     return filterTracks(summaryData.tracks, filters);
   }, [summaryData, filters]);
 
+  // ── Per-track wind100 lookup for the selected track ────────────────────────
+  const wind100TrackData = useMemo((): Record<string, Wind100TimestepEntry> | null => {
+    if (!selectedTrack || !wind100YearData) return null;
+    return wind100YearData.tracks[String(selectedTrack.id)] ?? null;
+  }, [selectedTrack, wind100YearData]);
+
   // ── Track selection handler ────────────────────────────────────────────────
   const handleTrackSelect = useCallback(async (track: TrackSummary) => {
     // Immediately highlight the selected track
@@ -64,11 +92,16 @@ export default function HomePage() {
     setTimesteps(null);
     setDetailError(null);
     setDetailLoading(true);
+    setWind100YearData(null); // clear stale data while loading
 
     try {
-      const yearDetails = await loadYearDetails(track.year);
+      const [yearDetails, w100Year] = await Promise.all([
+        loadYearDetails(track.year),
+        loadWind100Year(track.year), // null if wind100 data absent
+      ]);
       const detail = getTrackDetail(yearDetails, track.id);
       setTimesteps(detail?.timesteps ?? []);
+      setWind100YearData(w100Year);
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : "Failed to load track details.");
     } finally {
@@ -81,6 +114,7 @@ export default function HomePage() {
     setTimesteps(null);
     setSelectedTimestep(null);
     setDetailError(null);
+    setWind100YearData(null);
   }, []);
 
   // ── Logout ─────────────────────────────────────────────────────────────────
@@ -146,6 +180,10 @@ export default function HomePage() {
               loading={detailLoading}
               error={detailError}
               quantileThresholds={summaryData!.quantile_thresholds}
+              wind100TrackData={wind100TrackData}
+              wind100Meta={wind100Meta}
+              wind100Metric={wind100Metric}
+              onWind100MetricChange={setWind100Metric}
             />
           )}
         </aside>
@@ -156,9 +194,13 @@ export default function HomePage() {
             tracks={filteredTracks}
             selectedTrack={selectedTrack}
             timesteps={timesteps}
+            selectedTimestep={selectedTimestep}
             onTrackSelect={handleTrackSelect}
             onTimestepSelect={setSelectedTimestep}
             onClearSelection={handleClearSelection}
+            wind100TrackData={wind100TrackData}
+            wind100Meta={wind100Meta}
+            wind100Metric={wind100Metric}
           />
         </main>
       </div>

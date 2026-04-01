@@ -44,3 +44,83 @@ export function formatDuration(hours: number): string {
 export function monthName(month: number): string {
   return MONTH_NAMES[month - 1] ?? String(month);
 }
+
+// ─── Wind100 color scale ──────────────────────────────────────────────────────
+//
+// Palette: "storm_alert" (10 stops, light yellow → deep purple).
+// Matches the R vector:
+//   storm_alert <- c("#ffffcc","#ffeda0","#fed976","#feb24c","#fd8d3c",
+//                    "#fc4e2a","#e31a1c","#bd0026","#800026","#4a0066")
+//
+// Normalization: value / globalMax → t ∈ [0, 1].
+// The globalMax MUST be the dataset-wide absolute maximum (from meta.json),
+// NOT a per-cyclone or per-timestep maximum, to ensure cross-track comparability.
+
+export const STORM_ALERT_PALETTE: readonly string[] = [
+  "#ffffcc",
+  "#ffeda0",
+  "#fed976",
+  "#feb24c",
+  "#fd8d3c",
+  "#fc4e2a",
+  "#e31a1c",
+  "#bd0026",
+  "#800026",
+  "#4a0066",
+];
+
+/** Parse a 6-digit hex color to [r, g, b] (0–255). */
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+/** Linearly interpolate between two hex colors. */
+function lerpColor(c1: string, c2: string, t: number): string {
+  const [r1, g1, b1] = hexToRgb(c1);
+  const [r2, g2, b2] = hexToRgb(c2);
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+/**
+ * Map a wind speed value to a color from the storm_alert palette.
+ *
+ * @param value     Wind speed (m s⁻¹) at this point.
+ * @param globalMax Dataset-wide maximum wind speed (from Wind100Meta).
+ *                  Must be the absolute maximum across all tracks and years,
+ *                  NOT a local or per-timestep maximum.
+ */
+export function getWindColor(value: number, globalMax: number): string {
+  if (!isFinite(value) || !isFinite(globalMax) || globalMax <= 0) {
+    return STORM_ALERT_PALETTE[0];
+  }
+  const t = Math.max(0, Math.min(1, value / globalMax));
+  const n = STORM_ALERT_PALETTE.length;
+  // Map t → floating index in [0, n-1], then interpolate between adjacent stops
+  const fi = t * (n - 1);
+  const lo = Math.min(Math.floor(fi), n - 2);
+  const hi = lo + 1;
+  const frac = fi - lo;
+  return lerpColor(STORM_ALERT_PALETTE[lo], STORM_ALERT_PALETTE[hi], frac);
+}
+
+/**
+ * Generate an array of {color, label} pairs for a legend.
+ * Produces `steps` evenly-spaced stops from 0 to globalMax.
+ */
+export function windColorLegendStops(
+  globalMax: number,
+  steps = 5
+): { color: string; label: string }[] {
+  return Array.from({ length: steps }, (_, i) => {
+    const value = (i / (steps - 1)) * globalMax;
+    return { color: getWindColor(value, globalMax), label: `${value.toFixed(0)}` };
+  });
+}

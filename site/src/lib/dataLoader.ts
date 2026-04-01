@@ -10,7 +10,7 @@
  * All files are static assets in public/data/ served by Vercel's CDN.
  */
 
-import { SummaryData, YearDetails, TrackDetail } from "@/types/cyclone";
+import { SummaryData, YearDetails, TrackDetail, Wind100YearData, Wind100Meta } from "@/types/cyclone";
 
 // Module-level caches (persist across React re-renders within a session)
 let summaryCache: SummaryData | null = null;
@@ -42,4 +42,42 @@ export function getTrackDetail(
   trackId: number
 ): TrackDetail | null {
   return yearDetails.tracks[String(trackId)] ?? null;
+}
+
+// ─── Wind100 loaders ──────────────────────────────────────────────────────────
+
+let wind100MetaCache: Wind100Meta | null = null;
+const wind100YearCache = new Map<number, Wind100YearData>();
+
+/**
+ * Load wind100/meta.json once per session.
+ * Returns null (no throw) if the file is absent — wind100 data is optional.
+ */
+export async function loadWind100Meta(): Promise<Wind100Meta | null> {
+  if (wind100MetaCache) return wind100MetaCache;
+  try {
+    const res = await fetch("/data/wind100/meta.json");
+    if (!res.ok) return null;
+    wind100MetaCache = (await res.json()) as Wind100Meta;
+    return wind100MetaCache;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load wind100/{year}.json for a given year.  Cached after first load.
+ * Returns null if the file is absent or cannot be parsed.
+ */
+export async function loadWind100Year(year: number): Promise<Wind100YearData | null> {
+  if (wind100YearCache.has(year)) return wind100YearCache.get(year)!;
+  try {
+    const res = await fetch(`/data/wind100/${year}.json`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as Wind100YearData;
+    wind100YearCache.set(year, data);
+    return data;
+  } catch {
+    return null;
+  }
 }
