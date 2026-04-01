@@ -551,25 +551,31 @@ function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
 
         {metricData ? (
           <div className="space-y-1">
-            {/* Global maximum */}
-            <InfoRow label="Global max" value={fWind(metricData.global?.[2])} />
-            {metricData.global && (
-              <>
-                <InfoRow label="  Δlon, Δlat" value={`${fCoord(metricData.global[0])}, ${fCoord(metricData.global[1])}`} />
-                <InfoRow label="  Distance" value={fDist(metricData.global[3])} />
-              </>
-            )}
+            {/* Global maximum - from the quadrant identified by gq */}
+            {(() => {
+              const gq = metricData.gq as "NW" | "NE" | "SW" | "SE" | null;
+              const globalData = gq ? metricData[gq] : null;
+              if (!globalData) return <InfoRow label="Global max" value="— no data" />;
+              return (
+                <>
+                  <InfoRow label={`Global max (${gq})`} value={fWind(globalData[2])} />
+                  <InfoRow label="  Δlon, Δlat" value={`${fCoord(globalData[0])}, ${fCoord(globalData[1])}`} />
+                  <InfoRow label="  Distance" value={fDist(globalData[3])} />
+                </>
+              );
+            })()}
             
             {/* Per-quadrant values */}
             <p className="text-xs text-gray-400 font-medium mt-1.5">By quadrant</p>
             {QUADRANT_KEYS.map((q) => {
               const qData = metricData[q];
+              const isGlobal = metricData.gq === q;
               if (!qData) return (
                 <InfoRow key={q} label={q} value="— no data" />
               );
               return (
-                <div key={q} className="pl-1 border-l-2 border-emerald-100 ml-1">
-                  <InfoRow label={q} value={fWind(qData[2])} />
+                <div key={q} className={`pl-1 border-l-2 ${isGlobal ? "border-emerald-400" : "border-emerald-100"} ml-1`}>
+                  <InfoRow label={`${q}${isGlobal ? " ★" : ""}`} value={fWind(qData[2])} />
                   <InfoRow label="  Δlon, Δlat" value={`${fCoord(qData[0])}, ${fCoord(qData[1])}`} />
                   <InfoRow label="  Distance" value={fDist(qData[3])} />
                 </div>

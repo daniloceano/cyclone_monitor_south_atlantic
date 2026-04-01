@@ -72,10 +72,12 @@ ENERGETICS_DECIMALS = 3
 MAX_COORDS_PER_TRACK = 120
 
 # ─── Region name mapping (source data uses short codes) ────────────────────────
+# Canonical codes: ARG, LA-PLATA, SE-BR
+# Based on cyclogenesis hotspots from Gramcianinov et al. (2019), Climate Dynamics
 REGION_DISPLAY_NAMES = {
-    "ARG": "Argentina / Patagonia",
-    "LA-PLATA": "SE South America",
-    "SE-BR": "SE Brazil Coast",
+    "ARG": "Southeastern Argentina",
+    "LA-PLATA": "La Plata River Discharge",
+    "SE-BR": "Southeast Brazil",
 }
 
 
