@@ -195,6 +195,7 @@ export default function HomePage() {
             selectedTrack={selectedTrack}
             timesteps={timesteps}
             selectedTimestep={selectedTimestep}
+            quantileThresholds={summaryData!.quantile_thresholds}
             onTrackSelect={handleTrackSelect}
             onTimestepSelect={setSelectedTimestep}
             onClearSelection={handleClearSelection}

@@ -19,6 +19,29 @@
  *   - While the overlay is active the track polyline is dimmed to near-
  *     invisibility; non-selected timestep markers are also faded.
  *   - The selected timestep gets a larger, bright marker.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ## Intensity-Based Track Coloring (unselected state)
+ *
+ * When no cyclone is selected, track colors reflect intensity using `max_vor42`
+ * (maximum filtered relative vorticity, ×10⁻⁵ s⁻¹) — the same metric used
+ * throughout the application for intensity classification.
+ *
+ * Color scheme:
+ *   - **Gray**: Tracks below the 10th percentile (p10) — low-intensity cyclones
+ *   - **Yellow → Orange → Red**: Tracks at or above p10, with more intense
+ *     cyclones appearing more red
+ *
+ * Percentile calculation:
+ *   - Computed at the **cyclone level** (max_vor42 per track), not timestep
+ *   - Thresholds are **global** across the entire dataset (6,789 tracks),
+ *     not recalculated dynamically for filtered subsets
+ *   - Pre-computed in `scripts/preprocess_data.py` and stored in `summary.json`
+ *
+ * When a cyclone is selected:
+ *   - Selected track: orange (#ea580c), full opacity
+ *   - Other tracks: dimmed light blue (#93c5fd), low opacity
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -37,11 +60,13 @@ import {
   TrackSummary,
   Timestep,
   PHASE_COLORS,
+  QuantileThresholds,
   Wind100TimestepEntry,
   Wind100Meta,
   Wind100Metric,
 } from "@/types/cyclone";
 import { formatDatetime, formatLat, formatLon } from "@/lib/utils";
+import { getIntensityColor, INTENSITY_COLORS } from "@/lib/colors";
 import Wind100MapOverlay, { Wind100Legend } from "./Wind100MapOverlay";
 
 // Fix Leaflet's default icon paths broken by webpack
@@ -57,6 +82,7 @@ interface CycloneMapProps {
   selectedTrack: TrackSummary | null;
   timesteps: Timestep[] | null;
   selectedTimestep: Timestep | null;
+  quantileThresholds: QuantileThresholds;
   onTrackSelect: (track: TrackSummary) => void;
   onTimestepSelect: (ts: Timestep) => void;
   onClearSelection: () => void;
@@ -71,17 +97,22 @@ const MAP_CENTER: [number, number] = [-42, -35];
 const MAP_ZOOM = 3;
 
 // Polyline style constants (tuned for light CARTO base layer)
-const STYLE_DEFAULT      = { color: "#2563eb", weight: 1,   opacity: 0.30 };
+// STYLE_DEFAULT is no longer used for unselected tracks — replaced by intensity-based colors
 const STYLE_HOVER        = { color: "#1d4ed8", weight: 2,   opacity: 0.70 };
 const STYLE_SELECTED     = { color: "#ea580c", weight: 2.5, opacity: 1    };
 const STYLE_SELECTED_DIM = { color: "#ea580c", weight: 1.5, opacity: 0.12 }; // timestep-active
 const STYLE_DIMMED       = { color: "#93c5fd", weight: 0.8, opacity: 0.18 };
+
+// Default style for unselected tracks (intensity color applied separately)
+const DEFAULT_WEIGHT = 1;
+const DEFAULT_OPACITY = 0.45;
 
 export default function CycloneMap({
   tracks,
   selectedTrack,
   timesteps,
   selectedTimestep,
+  quantileThresholds,
   onTrackSelect,
   onTimestepSelect,
   onClearSelection,
@@ -136,11 +167,17 @@ export default function CycloneMap({
             ([lon, lat]) => [lat, lon] as [number, number]
           );
 
-          const style = isSelected
-            ? selectedTrackStyle
-            : isDimmed
-            ? STYLE_DIMMED
-            : STYLE_DEFAULT;
+          // Compute style based on selection state
+          let style: { color: string; weight: number; opacity: number };
+          if (isSelected) {
+            style = selectedTrackStyle;
+          } else if (isDimmed) {
+            style = STYLE_DIMMED;
+          } else {
+            // No selection — use intensity-based color
+            const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);
+            style = { color: intensityColor, weight: DEFAULT_WEIGHT, opacity: DEFAULT_OPACITY };
+          }
 
           return (
             <TrackPolyline
@@ -266,6 +303,9 @@ export default function CycloneMap({
           />
         )}
 
+        {/* ── Intensity legend (only when no track selected) ─────────────── */}
+        {!selectedTrack && <IntensityLegend thresholds={quantileThresholds} />}
+
         {/* ── Map event handler (click on ocean clears selection) ─────────── */}
         <MapClickHandler onClear={onClearSelection} hasSelection={selectedTrack !== null} />
       </MapContainer>
@@ -278,11 +318,50 @@ export default function CycloneMap({
   );
 }
 
+// ── Intensity Legend ──────────────────────────────────────────────────────────
+function IntensityLegend({ thresholds }: { thresholds: QuantileThresholds }) {
+  return (
+    <div className="leaflet-bottom leaflet-right">
+      <div className="leaflet-control bg-white/95 backdrop-blur-sm rounded-lg shadow-md p-3 mr-3 mb-3">
+        <div className="text-xs font-semibold text-gray-700 mb-2">
+          Intensity (max vor42)
+        </div>
+        <div className="flex items-center gap-1">
+          {/* Gray for below p10 */}
+          <div className="flex flex-col items-center">
+            <div
+              className="w-4 h-3 rounded-sm border border-gray-300"
+              style={{ backgroundColor: INTENSITY_COLORS.gray }}
+            />
+            <span className="text-[10px] text-gray-500 mt-0.5">&lt;p10</span>
+          </div>
+          {/* Gradient bar from yellow to red */}
+          <div className="flex flex-col items-center mx-1">
+            <div
+              className="w-20 h-3 rounded-sm border border-gray-300"
+              style={{
+                background: `linear-gradient(to right, ${INTENSITY_COLORS.yellow}, ${INTENSITY_COLORS.orange}, ${INTENSITY_COLORS.red})`,
+              }}
+            />
+            <div className="flex justify-between w-20 text-[10px] text-gray-500 mt-0.5">
+              <span>{thresholds.p10.toFixed(1)}</span>
+              <span>{thresholds.max.toFixed(1)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="text-[9px] text-gray-400 mt-1.5">
+          ×10⁻⁵ s⁻¹ (vorticity)
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Per-track polyline with hover handling ────────────────────────────────────
 interface TrackPolylineProps {
   track: TrackSummary;
   positions: [number, number][];
-  style: typeof STYLE_DEFAULT;
+  style: { color: string; weight: number; opacity: number };
   renderer: L.Canvas;
   isSelected: boolean;
   onSelect: (t: TrackSummary) => void;
