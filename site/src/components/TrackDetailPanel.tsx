@@ -205,20 +205,30 @@ export default function TrackDetailPanel({
             {/* Selected timestep details */}
             {selectedTimestep && (
               <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-200">
-                <div className="flex items-center gap-2 text-xs">
-                  <span
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ background: PHASE_COLORS[selectedTimestep.phase] }}
-                  />
-                  <span className="font-medium text-orange-800">
-                    {PHASE_LABELS[selectedTimestep.phase]}
-                  </span>
-                  <span className="text-gray-500">·</span>
-                  <span className="text-gray-600 font-mono">
-                    {selectedTimestep.date.replace("T", " ").slice(0, 16)} UTC
-                  </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ background: PHASE_COLORS[selectedTimestep.phase] }}
+                    />
+                    <span className="font-medium text-orange-800">
+                      {PHASE_LABELS[selectedTimestep.phase]}
+                    </span>
+                    <span className="text-gray-500">·</span>
+                    <span className="text-gray-600 font-mono">
+                      {selectedTimestep.date.replace("T", " ").slice(0, 16)} UTC
+                    </span>
+                  </div>
+                  {/* Back to track button */}
+                  <button
+                    onClick={() => onTimestepSelect(null)}
+                    className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded transition flex items-center gap-1"
+                    title="Exit timestep view and return to track overview"
+                  >
+                    ← Back to track
+                  </button>
                 </div>
-                <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600">
+                <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600">
                   <span>Lat: {formatLat(selectedTimestep.lat)}</span>
                   <span>Lon: {formatLon(selectedTimestep.lon)}</span>
                   <span>vor42: {selectedTimestep.vor42.toFixed(2)}</span>
@@ -226,12 +236,6 @@ export default function TrackDetailPanel({
                     <span className="text-blue-600">LEC data available</span>
                   )}
                 </div>
-                <button
-                  onClick={() => onTimestepSelect(null)}
-                  className="mt-1 text-xs text-orange-600 hover:text-orange-800 underline"
-                >
-                  Clear selection
-                </button>
               </div>
             )}
 
@@ -319,7 +323,7 @@ export default function TrackDetailPanel({
         )}
 
         {/* ── Selected timestep detail ──────────────────────────────────── */}
-        {selectedTimestep && <TimestepDetail ts={selectedTimestep} />}
+        {selectedTimestep && <TimestepDetail ts={selectedTimestep} w100Entry={w100Entry} wind100Metric={wind100Metric} />}
       </div>
     </div>
   );

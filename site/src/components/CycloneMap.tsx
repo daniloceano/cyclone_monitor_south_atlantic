@@ -97,11 +97,9 @@ const MAP_CENTER: [number, number] = [-42, -35];
 const MAP_ZOOM = 3;
 
 // Polyline style constants (tuned for light CARTO base layer)
-// STYLE_DEFAULT is no longer used for unselected tracks — replaced by intensity-based colors
 const STYLE_HOVER        = { color: "#1d4ed8", weight: 2,   opacity: 0.70 };
 const STYLE_SELECTED     = { color: "#ea580c", weight: 2.5, opacity: 1    };
 const STYLE_SELECTED_DIM = { color: "#ea580c", weight: 1.5, opacity: 0.12 }; // timestep-active
-const STYLE_DIMMED       = { color: "#93c5fd", weight: 0.8, opacity: 0.18 };
 
 // Default style for unselected tracks (intensity color applied separately)
 const DEFAULT_WEIGHT = 1;
@@ -160,9 +158,16 @@ export default function CycloneMap({
         />
 
         {/* ── Track polylines ─────────────────────────────────────────────── */}
+        {/* When a track is selected, only render the selected track.
+            When no track is selected, render all tracks with intensity colors. */}
         {tracks.map((track) => {
           const isSelected = selectedTrack?.id === track.id;
-          const isDimmed = selectedTrack !== null && !isSelected;
+          
+          // If there's a selection and this isn't the selected track, don't render it
+          if (selectedTrack !== null && !isSelected) {
+            return null;
+          }
+          
           const positions = track.coords.map(
             ([lon, lat]) => [lat, lon] as [number, number]
           );
@@ -171,8 +176,6 @@ export default function CycloneMap({
           let style: { color: string; weight: number; opacity: number };
           if (isSelected) {
             style = selectedTrackStyle;
-          } else if (isDimmed) {
-            style = STYLE_DIMMED;
           } else {
             // No selection — use intensity-based color
             const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);

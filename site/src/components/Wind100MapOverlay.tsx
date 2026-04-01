@@ -15,16 +15,16 @@
  * 2. Two dashed centre lines (horizontal + vertical) dividing the domain into
  *    the four Lagrangian quadrants: NW | NE / SW | SE.
  *
- * 3. Quadrant labels (NW, NE, SW, SE) positioned near the inner corners.
- *    Implemented as Leaflet divIcon markers for crisp rendering.
- *
- * 4. A CircleMarker for each quadrant's wind extremum position.
+ * 3. A CircleMarker for each quadrant's wind extremum position.
  *    – Radius 8 px; filled with the storm_alert color mapped to wind speed.
  *    – White border (weight 2) for contrast against the base map.
  *    – A Tooltip (visible on hover) showing quadrant, metric, speed, distance,
  *      coordinates, and timestamp.
  *
- * 5. A cross-hair marker at the cyclone centre position.
+ * 4. A cross-hair marker at the cyclone centre position.
+ *
+ * Note: Quadrant labels (NW, NE, SW, SE) have been removed to reduce visual
+ * clutter — the quadrant positions are self-evident from the dividing lines.
  *
  * Coordinate convention
  * ─────────────────────
@@ -36,8 +36,7 @@
  * (globalMax from Wind100Meta), ensuring cross-track comparability.
  */
 
-import L from "leaflet";
-import { Rectangle, Polyline, CircleMarker, Marker, Tooltip } from "react-leaflet";
+import { Rectangle, Polyline, CircleMarker, Tooltip } from "react-leaflet";
 import { Wind100MetricEntry, Wind100Metric } from "@/types/cyclone";
 import { getWindColor, windColorLegendStops, STORM_ALERT_PALETTE } from "@/lib/utils";
 import { formatDatetime } from "@/lib/utils";
@@ -49,49 +48,11 @@ const HALF = 10; // → 20° × 20° total domain
 
 const QUADRANT_KEYS = ["NW", "NE", "SW", "SE"] as const;
 
-/** Label position offsets (relative to cyclone centre) for each quadrant. */
-const LABEL_OFFSETS: Record<string, [number, number]> = {
-  NW: [-HALF * 0.2,  HALF * 0.1],   // [Δlat, Δlon]: slightly in from NW corner
-  NE: [-HALF * 0.2, -HALF * 0.1],
-  SW: [ HALF * 0.2,  HALF * 0.1],
-  SE: [ HALF * 0.2, -HALF * 0.1],
-};
-
 /** Metric display labels. */
 const METRIC_LABELS: Record<Wind100Metric, string> = {
   max: "Max wind",
   p99: "P99 wind",
 };
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-interface QuadrantLabelProps {
-  lat: number;
-  lon: number;
-  label: string;
-}
-
-function QuadrantLabel({ lat, lon, label }: QuadrantLabelProps) {
-  const icon = L.divIcon({
-    className: "",
-    html: `<div style="
-      background:rgba(255,255,255,0.75);
-      border:1px solid #6b7280;
-      border-radius:3px;
-      padding:1px 5px;
-      font-size:10px;
-      font-weight:700;
-      color:#374151;
-      white-space:nowrap;
-      line-height:1.4;
-      pointer-events:none;
-    ">${label}</div>`,
-    iconSize: [32, 18],
-    iconAnchor: [16, 9],
-  });
-
-  return <Marker position={[lat, lon]} icon={icon} interactive={false} />;
-}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -163,20 +124,7 @@ export default function Wind100MapOverlay({
         pathOptions={{ color: "#475569", weight: 1, dashArray: "4 5", opacity: 0.55, interactive: false }}
       />
 
-      {/* ── 3. Quadrant labels ────────────────────────────────────────────── */}
-      {QUADRANT_KEYS.map((qd) => {
-        const [dLat, dLon] = LABEL_OFFSETS[qd];
-        return (
-          <QuadrantLabel
-            key={`label-${qd}`}
-            lat={cycloneLat + dLat}
-            lon={cycloneLon + dLon}
-            label={qd}
-          />
-        );
-      })}
-
-      {/* ── 4. Cyclone centre crosshair ──────────────────────────────────── */}
+      {/* ── 3. Cyclone centre crosshair ──────────────────────────────────── */}
       <CircleMarker
         center={[cycloneLat, cycloneLon]}
         radius={5}
@@ -195,7 +143,7 @@ export default function Wind100MapOverlay({
         </Tooltip>
       </CircleMarker>
 
-      {/* ── 5. Wind extremum markers (one per quadrant) ──────────────────── */}
+      {/* ── 4. Wind extremum markers (one per quadrant) ──────────────────── */}
       {data && QUADRANT_KEYS.map((qd) => {
         const q = data[qd];
         if (!q) return null;
