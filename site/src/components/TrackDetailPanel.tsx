@@ -505,13 +505,30 @@ function MiniColorScale({ globalMax }: { globalMax: number }) {
 }
 
 // ── Timestep detail card ───────────────────────────────────────────────────────
-function TimestepDetail({ ts }: { ts: Timestep }) {
+interface TimestepDetailProps {
+  ts: Timestep;
+  w100Entry: Wind100TimestepEntry | null;
+  wind100Metric: Wind100Metric;
+}
+
+function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
   const hasEnergetics =
     ts.Az  !== undefined || ts.Ae  !== undefined ||
     ts.Kz  !== undefined || ts.Ke  !== undefined;
 
   const fJ  = (v: number | undefined) => v !== undefined ? `${v.toFixed(0)} J m⁻²` : "—";
   const fW  = (v: number | undefined) => v !== undefined ? `${v.toFixed(3)} W m⁻²` : "—";
+
+  // Wind100 data for the selected metric
+  const metricData = w100Entry
+    ? wind100Metric === "max" ? w100Entry.max : w100Entry.p99
+    : null;
+  const metricLabel = wind100Metric === "max" ? "Maximum" : "99th percentile";
+
+  // Format wind value
+  const fWind = (v: number | undefined) => v !== undefined ? `${v.toFixed(1)} m/s` : "—";
+  const fDist = (v: number | undefined) => v !== undefined ? `${v.toFixed(1)} km` : "—";
+  const fCoord = (v: number | undefined) => v !== undefined ? `${v.toFixed(2)}°` : "—";
 
   return (
     <div className="bg-white border border-orange-200 rounded-lg p-2.5 space-y-1.5 shadow-sm">
@@ -520,6 +537,51 @@ function TimestepDetail({ ts }: { ts: Timestep }) {
       <InfoRow label="Position" value={`${formatLat(ts.lat)}, ${formatLon(ts.lon)}`} />
       <InfoRow label="Phase" value={PHASE_LABELS[ts.phase] ?? ts.phase} highlight />
       <InfoRow label="vor42" value={formatVor42(ts.vor42)} />
+
+      {/* ── Wind100 data ──────────────────────────────────────────────── */}
+      <div className="pt-1.5 border-t border-gray-200">
+        <p className="text-xs font-semibold text-emerald-700 mb-1.5">
+          🌬️ Wind 100 m ({metricLabel})
+          {!metricData && (
+            <span className="font-normal text-gray-400 ml-1">
+              — not available at this timestep
+            </span>
+          )}
+        </p>
+
+        {metricData ? (
+          <div className="space-y-1">
+            {/* Global maximum */}
+            <InfoRow label="Global max" value={fWind(metricData.global?.[2])} />
+            {metricData.global && (
+              <>
+                <InfoRow label="  Δlon, Δlat" value={`${fCoord(metricData.global[0])}, ${fCoord(metricData.global[1])}`} />
+                <InfoRow label="  Distance" value={fDist(metricData.global[3])} />
+              </>
+            )}
+            
+            {/* Per-quadrant values */}
+            <p className="text-xs text-gray-400 font-medium mt-1.5">By quadrant</p>
+            {QUADRANT_KEYS.map((q) => {
+              const qData = metricData[q];
+              if (!qData) return (
+                <InfoRow key={q} label={q} value="— no data" />
+              );
+              return (
+                <div key={q} className="pl-1 border-l-2 border-emerald-100 ml-1">
+                  <InfoRow label={q} value={fWind(qData[2])} />
+                  <InfoRow label="  Δlon, Δlat" value={`${fCoord(qData[0])}, ${fCoord(qData[1])}`} />
+                  <InfoRow label="  Distance" value={fDist(qData[3])} />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 italic">
+            No wind data available for this timestep.
+          </p>
+        )}
+      </div>
 
       {/* ── All LEC terms ──────────────────────────────────────────────── */}
       <div className="pt-1.5 border-t border-gray-200">
