@@ -44,7 +44,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -228,6 +228,7 @@ export default function CycloneMap({
                     eventHandlers={{
                       click: (e) => {
                         L.DomEvent.stopPropagation(e);
+                        e.originalEvent?.stopPropagation();
                         onTimestepSelect(ts);
                       },
                     }}
@@ -262,6 +263,7 @@ export default function CycloneMap({
                     eventHandlers={{
                       click: (e) => {
                         L.DomEvent.stopPropagation(e);
+                        e.originalEvent?.stopPropagation();
                         onTimestepSelect(ts);
                       },
                     }}
@@ -400,7 +402,10 @@ function TrackPolyline({
 
   const handleClick = useCallback(
     (e: L.LeafletMouseEvent) => {
+      // Stop both Leaflet and DOM propagation so the map-level click handler
+      // (which calls onClear) never fires when a track polyline is clicked.
       L.DomEvent.stopPropagation(e);
+      e.originalEvent?.stopPropagation();
       onSelect(track);
     },
     [track, onSelect]
@@ -456,7 +461,12 @@ function MapClickHandler({
 }) {
   const map = useMap();
 
-  useEffect(() => {
+  // useLayoutEffect (synchronous) ensures the handler is removed immediately
+  // after `hasSelection` becomes false — before the next browser paint.
+  // This closes the race-condition window where a track click could fire the
+  // map click (which calls onClear) within the same React batch, clearing the
+  // selection that was just set.
+  useLayoutEffect(() => {
     if (!hasSelection) return;
     const handler = () => onClear();
     map.on("click", handler);
