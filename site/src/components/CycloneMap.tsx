@@ -196,6 +196,9 @@ export default function CycloneMap({
           );
         })}
 
+        {/* ── Persistent panes — always in the DOM, never block clicks ───────── */}
+        <Pane name="wind100-markers" style={{ zIndex: 700 }} />
+
         {/* ── Timestep markers (only for selected track) ──────────────────── */}
         {/* Wrapped in a Pane to ensure markers render above the track polyline */}
         <Pane name="timestep-markers" style={{ zIndex: 650 }}>
