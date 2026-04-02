@@ -36,7 +36,7 @@
  * (globalMax from Wind100Meta), ensuring cross-track comparability.
  */
 
-import { Rectangle, Polyline, CircleMarker, Tooltip } from "react-leaflet";
+import { Rectangle, Polyline, CircleMarker, Tooltip, Pane } from "react-leaflet";
 import { Wind100MetricEntry, Wind100Metric } from "@/types/cyclone";
 import { getWindColor, windColorLegendStops, STORM_ALERT_PALETTE } from "@/lib/utils";
 import { formatDatetime } from "@/lib/utils";
@@ -47,6 +47,19 @@ import { formatDatetime } from "@/lib/utils";
 const HALF = 10; // → 20° × 20° total domain
 
 const QUADRANT_KEYS = ["NW", "NE", "SW", "SE"] as const;
+
+/**
+ * The source dataset stores quadrant labels with N/S inverted relative to
+ * geographic convention (verified against raw CSV coordinates — the positions
+ * labeled "NW"/"NE" are south of the cyclone centre; those labeled "SW"/"SE"
+ * are north).  This mapping converts dataset keys → geographic display labels
+ * so that the UI agrees with the marker positions drawn on the map.
+ *
+ * E/W is correct in the dataset; only N↔S is swapped.
+ */
+const QUADRANT_DISPLAY: Record<string, string> = {
+  NW: "SW", NE: "SE", SW: "NW", SE: "NE",
+};
 
 /** Metric display labels. */
 const METRIC_LABELS: Record<Wind100Metric, string> = {
@@ -144,58 +157,64 @@ export default function Wind100MapOverlay({
       </CircleMarker>
 
       {/* ── 4. Wind extremum markers (one per quadrant) ──────────────────── */}
-      {data && QUADRANT_KEYS.map((qd) => {
-        const q = data[qd];
-        if (!q) return null;
+      {/* Rendered in the wind100-markers pane (zIndex 700) so they always     */}
+      {/* appear above the track polyline and lifecycle-phase markers (650).   */}
+      <Pane name="wind100-markers" style={{ zIndex: 700 }}>
+        {data && QUADRANT_KEYS.map((qd) => {
+          const q = data[qd];
+          if (!q) return null;
 
-        const [qLon, qLat, qVal, qDist] = q;
-        if (qLon == null || qLat == null || qVal == null) return null;
+          const [qLon, qLat, qVal, qDist] = q;
+          if (qLon == null || qLat == null || qVal == null) return null;
 
-        const color = getWindColor(qVal, globalMax);
-        const isGlobal = data.gq === qd;
+          const color = getWindColor(qVal, globalMax);
+          const isGlobal = data.gq === qd;
+          // Geographic display label (N/S inverted in source dataset — see QUADRANT_DISPLAY)
+          const geoLabel = QUADRANT_DISPLAY[qd] ?? qd;
 
-        return (
-          <CircleMarker
-            key={`w100-${qd}`}
-            center={[qLat, qLon]}
-            radius={isGlobal ? 12 : 7}
-            pathOptions={{
-              fillColor: color,
-              color: isGlobal ? "#ea580c" : "#ffffff",  // Orange border for global max
-              weight: isGlobal ? 3 : 1.5,
-              fillOpacity: 0.95,
-            }}
-          >
-            <Tooltip direction="top" offset={[0, -10]} opacity={0.96}>
-              <div className="text-xs space-y-0.5">
-                <div className="font-bold text-gray-800 flex items-center gap-1.5">
-                  <span
-                    style={{ background: color, width: 10, height: 10, borderRadius: "50%", display: "inline-block", border: "1px solid #fff" }}
-                  />
-                  {qd} quadrant
-                  {isGlobal && (
-                    <span className="text-orange-600 font-semibold ml-1">★ global max</span>
+          return (
+            <CircleMarker
+              key={`w100-${qd}`}
+              center={[qLat, qLon]}
+              radius={isGlobal ? 12 : 7}
+              pathOptions={{
+                fillColor: color,
+                color: isGlobal ? "#ea580c" : "#ffffff",
+                weight: isGlobal ? 3 : 1.5,
+                fillOpacity: 0.95,
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -10]} opacity={0.96}>
+                <div className="text-xs space-y-0.5">
+                  <div className="font-bold text-gray-800 flex items-center gap-1.5">
+                    <span
+                      style={{ background: color, width: 10, height: 10, borderRadius: "50%", display: "inline-block", border: "1px solid #fff" }}
+                    />
+                    {geoLabel} quadrant
+                    {isGlobal && (
+                      <span className="text-orange-600 font-semibold ml-1">★ global max</span>
+                    )}
+                  </div>
+                  <div className="text-gray-500">{metricLabel} · {dateLabel}</div>
+                  <div className="font-semibold text-gray-900">
+                    Wind speed: {qVal.toFixed(2)} m s⁻¹
+                  </div>
+                  {qDist != null && (
+                    <div className="text-gray-600">Distance to centre: {qDist.toFixed(2)}°</div>
                   )}
+                  <div className="text-gray-600">
+                    Δlon: {(qLon - cycloneLon).toFixed(3)}°
+                    &ensp;Δlat: {(qLat - cycloneLat).toFixed(3)}°
+                  </div>
+                  <div className="text-gray-500 font-mono text-[10px]">
+                    {Math.abs(qLat).toFixed(3)}°{qLat < 0 ? "S" : "N"}, {Math.abs(qLon).toFixed(3)}°{qLon < 0 ? "W" : "E"}
+                  </div>
                 </div>
-                <div className="text-gray-500">{metricLabel} · {dateLabel}</div>
-                <div className="font-semibold text-gray-900">
-                  Wind speed: {qVal.toFixed(2)} m s⁻¹
-                </div>
-                {qDist != null && (
-                  <div className="text-gray-600">Distance to centre: {qDist.toFixed(2)}°</div>
-                )}
-                <div className="text-gray-600">
-                  Δlon: {(qLon - cycloneLon).toFixed(3)}°
-                  &ensp;Δlat: {(qLat - cycloneLat).toFixed(3)}°
-                </div>
-                <div className="text-gray-500 font-mono text-[10px]">
-                  {Math.abs(qLat).toFixed(3)}°{qLat < 0 ? "S" : "N"}, {Math.abs(qLon).toFixed(3)}°{qLon < 0 ? "W" : "E"}
-                </div>
-              </div>
-            </Tooltip>
-          </CircleMarker>
-        );
-      })}
+              </Tooltip>
+            </CircleMarker>
+          );
+        })}
+      </Pane>
     </>
   );
 }

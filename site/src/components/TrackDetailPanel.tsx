@@ -46,6 +46,25 @@ interface TrackDetailPanelProps {
 
 const QUADRANT_KEYS = ["NW", "NE", "SW", "SE"] as const;
 
+/**
+ * N/S labels are inverted in the source dataset relative to geographic
+ * convention (verified against raw CSV coordinates).  E/W is correct.
+ * Use this mapping wherever a quadrant label is shown to the user.
+ */
+const QUADRANT_DISPLAY: Record<string, string> = {
+  NW: "SW", NE: "SE", SW: "NW", SE: "NE",
+};
+
+/**
+ * Grid iteration order for the 2×2 quadrant panel, arranged so that the
+ * displayed geographic labels read correctly (NW top-left … SE bottom-right).
+ *   dataset SW → display NW (top-left)
+ *   dataset SE → display NE (top-right)
+ *   dataset NW → display SW (bottom-left)
+ *   dataset NE → display SE (bottom-right)
+ */
+const GRID_KEYS = ["SW", "SE", "NW", "NE"] as const;
+
 export default function TrackDetailPanel({
   track,
   timesteps,
@@ -408,16 +427,19 @@ function Wind100Section({
           </p>
         ) : (
           <>
-            {/* Quadrant grid */}
+            {/* Quadrant grid — GRID_KEYS iterates dataset keys in geographic
+                display order: SW→NW(top-left), SE→NE(top-right),
+                NW→SW(bottom-left), NE→SE(bottom-right). */}
             <div className="grid grid-cols-2 gap-1.5">
-              {QUADRANT_KEYS.map((qd) => {
+              {GRID_KEYS.map((qd) => {
                 const q: Wind100QArray | null = metricData[qd];
                 const isGlobal = metricData.gq === qd;
+                const geoLabel = QUADRANT_DISPLAY[qd] ?? qd;
                 if (!q) {
                   return (
                     <div key={qd} className="bg-white border border-gray-200 rounded-md px-2 py-1.5 opacity-50">
                       <div className="flex items-center gap-1 mb-0.5">
-                        <span className="text-[10px] font-bold text-gray-500">{qd}</span>
+                        <span className="text-[10px] font-bold text-gray-500">{geoLabel}</span>
                       </div>
                       <span className="text-[10px] text-gray-400">—</span>
                     </div>
@@ -437,7 +459,7 @@ function Wind100Section({
                         className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                         style={{ background: color, border: "1px solid #e5e7eb" }}
                       />
-                      <span className="text-[10px] font-bold text-gray-700">{qd}</span>
+                      <span className="text-[10px] font-bold text-gray-700">{geoLabel}</span>
                       {isGlobal && (
                         <span className="text-[9px] text-emerald-600 font-semibold">★</span>
                       )}
@@ -461,7 +483,7 @@ function Wind100Section({
             {/* Global quad note */}
             {metricData.gq && (
               <p className="text-[10px] text-gray-500 leading-tight">
-                ★ Global maximum in <span className="font-semibold text-emerald-700">{metricData.gq}</span> quadrant.
+                ★ Global maximum in <span className="font-semibold text-emerald-700">{QUADRANT_DISPLAY[metricData.gq] ?? metricData.gq}</span> quadrant.
                 &ensp;Scale max: {globalMax.toFixed(1)} m s⁻¹ (dataset-wide).
               </p>
             )}
@@ -526,9 +548,10 @@ function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
   const metricLabel = wind100Metric === "max" ? "Maximum" : "99th percentile";
 
   // Format wind value
-  const fWind = (v: number | undefined) => v !== undefined ? `${v.toFixed(1)} m/s` : "—";
-  const fDist = (v: number | undefined) => v !== undefined ? `${v.toFixed(1)} km` : "—";
-  const fCoord = (v: number | undefined) => v !== undefined ? `${v.toFixed(2)}°` : "—";
+  const fWind = (v: number | undefined) => v !== undefined ? `${v.toFixed(1)} m s⁻¹` : "—";
+  // Distance is stored as angular distance in degrees, not km
+  const fDist = (v: number | undefined) => v !== undefined ? `${v.toFixed(2)}°` : "—";
+  const fDelta = (v: number | undefined) => v !== undefined ? `${v > 0 ? "+" : ""}${v.toFixed(2)}°` : "—";
 
   return (
     <div className="bg-white border border-orange-200 rounded-lg p-2.5 space-y-1.5 shadow-sm">
@@ -555,28 +578,35 @@ function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
             {(() => {
               const gq = metricData.gq as "NW" | "NE" | "SW" | "SE" | null;
               const globalData = gq ? metricData[gq] : null;
-              if (!globalData) return <InfoRow label="Global max" value="— no data" />;
+              const geoLabel = gq ? (QUADRANT_DISPLAY[gq] ?? gq) : null;
+              if (!globalData || !geoLabel) return <InfoRow label="Global max" value="— no data" />;
+              // globalData[0] = absolute lon, [1] = absolute lat
+              const dlon = globalData[0] != null ? globalData[0] - ts.lon : undefined;
+              const dlat = globalData[1] != null ? globalData[1] - ts.lat : undefined;
               return (
                 <>
-                  <InfoRow label={`Global max (${gq})`} value={fWind(globalData[2])} />
-                  <InfoRow label="  Δlon, Δlat" value={`${fCoord(globalData[0])}, ${fCoord(globalData[1])}`} />
+                  <InfoRow label={`Global max (${geoLabel})`} value={fWind(globalData[2])} />
+                  <InfoRow label="  Δlon, Δlat" value={`${fDelta(dlon)}, ${fDelta(dlat)}`} />
                   <InfoRow label="  Distance" value={fDist(globalData[3])} />
                 </>
               );
             })()}
             
-            {/* Per-quadrant values */}
+            {/* Per-quadrant values — GRID_KEYS gives geographic display order */}
             <p className="text-xs text-gray-400 font-medium mt-1.5">By quadrant</p>
-            {QUADRANT_KEYS.map((q) => {
+            {GRID_KEYS.map((q) => {
               const qData = metricData[q];
               const isGlobal = metricData.gq === q;
+              const geoLabel = QUADRANT_DISPLAY[q] ?? q;
               if (!qData) return (
-                <InfoRow key={q} label={q} value="— no data" />
+                <InfoRow key={q} label={geoLabel} value="— no data" />
               );
+              const dlon = qData[0] != null ? qData[0] - ts.lon : undefined;
+              const dlat = qData[1] != null ? qData[1] - ts.lat : undefined;
               return (
                 <div key={q} className={`pl-1 border-l-2 ${isGlobal ? "border-emerald-400" : "border-emerald-100"} ml-1`}>
-                  <InfoRow label={`${q}${isGlobal ? " ★" : ""}`} value={fWind(qData[2])} />
-                  <InfoRow label="  Δlon, Δlat" value={`${fCoord(qData[0])}, ${fCoord(qData[1])}`} />
+                  <InfoRow label={`${geoLabel}${isGlobal ? " ★" : ""}`} value={fWind(qData[2])} />
+                  <InfoRow label="  Δlon, Δlat" value={`${fDelta(dlon)}, ${fDelta(dlat)}`} />
                   <InfoRow label="  Distance" value={fDist(qData[3])} />
                 </div>
               );
