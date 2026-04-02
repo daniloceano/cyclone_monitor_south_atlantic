@@ -98,9 +98,9 @@ data/processed/tracks_by_id/
 # site/public/data/details/
 
 # Wind100 JSON files (~249 MB uncompressed, regeneratable from data/raw/wind100/).
-# Regenerate with: conda run -n data python scripts/generate_wind100_json.py
-# Must be present in site/public/data/wind100/ before `npm run build` or `npm run dev`.
-site/public/data/wind100/
+# Regenerate with: conda run -n cyclone_monitor python scripts/generate_wind100_json.py
+# Committed for Vercel deployments (same strategy as details/). Un-comment to exclude locally.
+# site/public/data/wind100/
 
 # Build artifacts
 .vercel/
