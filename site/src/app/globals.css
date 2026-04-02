@@ -43,6 +43,62 @@
   background: #9ca3af;
 }
 
+/* ── Timestep slider ───────────────────────────────────────────────────────── */
+/*
+ * .timestep-slider uses two CSS custom properties set inline:
+ *   --track-bg   : phase-gradient (or solid color for single timestep)
+ *   --thumb-color: current phase color for the thumb
+ */
+.timestep-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track-bg, #d1d5db);
+  outline: none;
+  border: none;
+}
+
+/* Thumb — WebKit / Blink */
+.timestep-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--thumb-color, #94a3b8);
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  cursor: grab;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.timestep-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Thumb — Firefox */
+.timestep-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--thumb-color, #94a3b8);
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  cursor: grab;
+}
+.timestep-slider::-moz-range-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.2);
+}
+
+/* Firefox track reset */
+.timestep-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track-bg, #d1d5db);
+}
+
 /* ── Tooltip text reset for light theme ────────────────────────────────────── */
 .leaflet-tooltip {
   background: rgba(255, 255, 255, 0.97) !important;

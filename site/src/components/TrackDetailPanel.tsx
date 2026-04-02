@@ -173,102 +173,14 @@ export default function TrackDetailPanel({
           </p>
         )}
 
-        {/* ── Timestep selector (dropdown) ─────────────────────────────────── */}
+        {/* ── Timestep navigator (slider + prev/next) ──────────────────────── */}
         {timesteps && !loading && (
-          <>
-            <p className="text-xs text-gray-400 mb-1">
-              {timesteps.length} timesteps
-              {lecCount > 0 && (
-                <span className="ml-1">
-                  · <span className="text-blue-600 font-medium">{lecCount}</span> with LEC data
-                </span>
-              )}
-            </p>
-
-            {/* Dropdown selector */}
-            <div className="relative">
-              <select
-                value={selectedTimestep ? timesteps.findIndex(ts => ts.date === selectedTimestep.date && ts.lon === selectedTimestep.lon) : ""}
-                onChange={(e) => {
-                  const idx = e.target.value;
-                  if (idx === "") {
-                    onTimestepSelect(null);
-                  } else {
-                    onTimestepSelect(timesteps[parseInt(idx)]);
-                  }
-                }}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
-              >
-                <option value="">Select a timestep...</option>
-                {timesteps.map((ts, i) => {
-                  const hasLec = ts.Kz !== undefined;
-                  const lecIsOriginal = hasLec
-                    ? (ts.lec_original !== undefined ? ts.lec_original : new Date(ts.date).getUTCHours() % 3 === 0)
-                    : false;
-                  const lecIndicator = hasLec ? (lecIsOriginal ? " ●" : " ○") : "";
-                  return (
-                    <option key={i} value={i}>
-                      {ts.date.replace("T", " ").slice(0, 16)} · {PHASE_LABELS[ts.phase]} · vor42: {ts.vor42.toFixed(2)}{lecIndicator}
-                    </option>
-                  );
-                })}
-              </select>
-              {/* Custom dropdown arrow */}
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Selected timestep details */}
-            {selectedTimestep && (
-              <div className="mt-2 p-2 bg-orange-50 rounded-lg border border-orange-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ background: PHASE_COLORS[selectedTimestep.phase] }}
-                    />
-                    <span className="font-medium text-orange-800">
-                      {PHASE_LABELS[selectedTimestep.phase]}
-                    </span>
-                    <span className="text-gray-500">·</span>
-                    <span className="text-gray-600 font-mono">
-                      {selectedTimestep.date.replace("T", " ").slice(0, 16)} UTC
-                    </span>
-                  </div>
-                  {/* Back to track button */}
-                  <button
-                    onClick={() => onTimestepSelect(null)}
-                    className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded transition flex items-center gap-1"
-                    title="Exit timestep view and return to track overview"
-                  >
-                    ← Back to track
-                  </button>
-                </div>
-                <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600">
-                  <span>Lat: {formatLat(selectedTimestep.lat)}</span>
-                  <span>Lon: {formatLon(selectedTimestep.lon)}</span>
-                  <span>vor42: {selectedTimestep.vor42.toFixed(2)}</span>
-                  {selectedTimestep.Kz !== undefined && (
-                    <span className="text-blue-600">LEC data available</span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {lecCount > 0 && (
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-400">
-                <span className="flex items-center gap-1">
-                  <span className="font-bold">●</span> LEC original (3-hourly)
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="font-bold">○</span> LEC interpolated
-                </span>
-              </div>
-            )}
-          </>
+          <TimestepNavigator
+            timesteps={timesteps}
+            selectedTimestep={selectedTimestep}
+            onSelect={onTimestepSelect}
+            lecCount={lecCount}
+          />
         )}
 
         {/* ── Wind100 Section ────────────────────────────────────────────── */}
@@ -344,6 +256,173 @@ export default function TrackDetailPanel({
         {/* ── Selected timestep detail ──────────────────────────────────── */}
         {selectedTimestep && <TimestepDetail ts={selectedTimestep} w100Entry={w100Entry} wind100Metric={wind100Metric} />}
       </div>
+    </div>
+  );
+}
+
+// ── Timestep navigator ────────────────────────────────────────────────────────
+
+interface TimestepNavigatorProps {
+  timesteps: import("@/types/cyclone").Timestep[];
+  selectedTimestep: import("@/types/cyclone").Timestep | null;
+  onSelect: (ts: import("@/types/cyclone").Timestep | null) => void;
+  lecCount: number;
+}
+
+function TimestepNavigator({ timesteps, selectedTimestep, onSelect, lecCount }: TimestepNavigatorProps) {
+  const n = timesteps.length;
+
+  // Index of the currently selected timestep (-1 = none)
+  const idx = selectedTimestep
+    ? timesteps.findIndex(
+        (ts) => ts.date === selectedTimestep.date && ts.lon === selectedTimestep.lon
+      )
+    : -1;
+
+  // Slider display value: use the found index, default to 0 when unset
+  const sliderVal = idx >= 0 ? idx : 0;
+
+  // Build a CSS linear-gradient coloring each segment by lifecycle phase
+  const trackGradient =
+    n <= 1
+      ? (PHASE_COLORS[timesteps[0]?.phase] ?? "#94a3b8")
+      : `linear-gradient(to right, ${timesteps
+          .map((ts, i) => {
+            const pct = ((i / (n - 1)) * 100).toFixed(1);
+            return `${PHASE_COLORS[ts.phase] ?? "#94a3b8"} ${pct}%`;
+          })
+          .join(", ")})`;
+
+  const goTo = (newIdx: number) => onSelect(timesteps[newIdx]);
+  const canPrev = idx > 0;
+  const canNext = idx < n - 1;
+
+  // Thumb color follows the current phase (or neutral when nothing selected)
+  const thumbColor =
+    idx >= 0 ? (PHASE_COLORS[timesteps[idx].phase] ?? "#94a3b8") : "#cbd5e1";
+
+  return (
+    <div className="space-y-1.5">
+      {/* ── Count row ───────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between text-xs text-gray-400">
+        <span>
+          {n} timesteps
+          {lecCount > 0 && (
+            <>
+              {" · "}
+              <span className="text-blue-600 font-medium">{lecCount}</span> with LEC
+            </>
+          )}
+        </span>
+        {idx >= 0 && (
+          <span className="font-mono text-gray-500">
+            {idx + 1} / {n}
+          </span>
+        )}
+      </div>
+
+      {/* ── Slider + prev/next row ───────────────────────────────────── */}
+      <div className="flex items-center gap-2">
+        {/* Prev button */}
+        <button
+          onClick={() => goTo(idx <= 0 ? 0 : idx - 1)}
+          disabled={!canPrev}
+          className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center border transition
+            disabled:opacity-30 disabled:cursor-not-allowed
+            enabled:hover:bg-orange-50 enabled:hover:border-orange-300 enabled:active:bg-orange-100
+            border-gray-300 text-gray-600 text-base leading-none"
+          title="Previous timestep"
+          aria-label="Previous timestep"
+        >
+          ‹
+        </button>
+
+        {/* Slider track */}
+        <div className="relative flex-1 py-1">
+          <input
+            type="range"
+            min={0}
+            max={n - 1}
+            step={1}
+            value={sliderVal}
+            onChange={(e) => goTo(parseInt(e.target.value))}
+            className="timestep-slider w-full cursor-pointer"
+            style={
+              {
+                "--track-bg": trackGradient,
+                "--thumb-color": thumbColor,
+              } as React.CSSProperties
+            }
+            aria-label="Timestep slider"
+          />
+        </div>
+
+        {/* Next button */}
+        <button
+          onClick={() => goTo(idx < 0 ? 0 : Math.min(idx + 1, n - 1))}
+          disabled={canNext === false && idx >= 0}
+          className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center border transition
+            disabled:opacity-30 disabled:cursor-not-allowed
+            enabled:hover:bg-orange-50 enabled:hover:border-orange-300 enabled:active:bg-orange-100
+            border-gray-300 text-gray-600 text-base leading-none"
+          title="Next timestep"
+          aria-label="Next timestep"
+        >
+          ›
+        </button>
+      </div>
+
+      {/* ── Selected timestep info card ──────────────────────────────── */}
+      {selectedTimestep ? (
+        <div className="p-2 bg-orange-50 rounded-lg border border-orange-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs min-w-0">
+              <span
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ background: PHASE_COLORS[selectedTimestep.phase] }}
+              />
+              <span className="font-medium text-orange-800 truncate">
+                {PHASE_LABELS[selectedTimestep.phase]}
+              </span>
+              <span className="text-gray-500 flex-shrink-0">·</span>
+              <span className="text-gray-600 font-mono text-[11px] flex-shrink-0">
+                {selectedTimestep.date.replace("T", " ").slice(0, 16)} UTC
+              </span>
+            </div>
+            <button
+              onClick={() => onSelect(null)}
+              className="ml-2 px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded transition flex-shrink-0"
+              title="Exit timestep view and return to track overview"
+            >
+              ← Track
+            </button>
+          </div>
+          <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600">
+            <span>Lat: {formatLat(selectedTimestep.lat)}</span>
+            <span>Lon: {formatLon(selectedTimestep.lon)}</span>
+            <span>vor42: {selectedTimestep.vor42.toFixed(2)}</span>
+            {selectedTimestep.Kz !== undefined && (
+              <span className="text-blue-600">LEC data available</span>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="text-[11px] text-gray-400 italic text-center">
+          Drag the slider or press › to select a timestep
+        </p>
+      )}
+
+      {/* ── LEC legend ──────────────────────────────────────────────── */}
+      {lecCount > 0 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-400">
+          <span className="flex items-center gap-1">
+            <span className="font-bold">●</span> LEC original (3-hourly)
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="font-bold">○</span> LEC interpolated
+          </span>
+        </div>
+      )}
     </div>
   );
 }
