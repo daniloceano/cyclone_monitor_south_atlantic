@@ -73,16 +73,6 @@ export default function TrackDetailPanel({
       ? (wind100TrackData[selectedTimestep.date] ?? null)
       : null;
 
-  // DEBUG: Log wind100 data flow (remove after diagnosis)
-  if (selectedTimestep && typeof window !== "undefined") {
-    console.log("[DEBUG] wind100TrackData:", wind100TrackData ? `${Object.keys(wind100TrackData).length} timesteps` : "null");
-    console.log("[DEBUG] selectedTimestep.date:", selectedTimestep.date);
-    console.log("[DEBUG] w100Entry:", w100Entry ? "FOUND" : "NULL");
-    if (wind100TrackData && !w100Entry) {
-      console.log("[DEBUG] Available keys (first 5):", Object.keys(wind100TrackData).slice(0, 5));
-    }
-  }
-
   return (
     <div className="flex flex-col flex-1 overflow-hidden border-t border-gray-200">
       {/* ── Panel header ──────────────────────────────────────────────────── */}

@@ -52,6 +52,7 @@ import {
   CircleMarker,
   useMap,
   Tooltip,
+  Pane,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -196,51 +197,96 @@ export default function CycloneMap({
         })}
 
         {/* ── Timestep markers (only for selected track) ──────────────────── */}
-        {selectedTrack &&
-          timesteps?.map((ts, i) => {
-            const pos: [number, number] = [ts.lat, ts.lon];
-            const color = PHASE_COLORS[ts.phase] ?? "#94a3b8";
-            const isThisSelected =
-              selectedTimestep !== null &&
-              selectedTimestep.date === ts.date &&
-              selectedTimestep.lon === ts.lon;
+        {/* Wrapped in a Pane to ensure markers render above the track polyline */}
+        <Pane name="timestep-markers" style={{ zIndex: 650 }}>
+          {selectedTrack &&
+            timesteps?.map((ts, i) => {
+              const pos: [number, number] = [ts.lat, ts.lon];
+              const color = PHASE_COLORS[ts.phase] ?? "#94a3b8";
+              const isThisSelected =
+                selectedTimestep !== null &&
+                selectedTimestep.date === ts.date &&
+                selectedTimestep.lon === ts.lon;
 
-            // When a timestep is active, fade all others to context
-            if (selectedTimestep && !isThisSelected) {
+              // When a timestep is active, fade all others to context but keep clickable
+              if (selectedTimestep && !isThisSelected) {
+                return (
+                  <CircleMarker
+                    key={`ts-${selectedTrack.id}-${i}`}
+                    center={pos}
+                    radius={6}
+                    pathOptions={{
+                      fillColor: color,
+                      color: "#ffffff",
+                      weight: 1,
+                      fillOpacity: 0.5,
+                      opacity: 0.7,
+                    }}
+                    eventHandlers={{
+                      click: (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        onTimestepSelect(ts);
+                      },
+                    }}
+                  >
+                    <Tooltip direction="top" offset={[0, -8]} opacity={0.9}>
+                      <div className="text-xs">
+                        <div className="font-semibold">{formatDatetime(ts.date)}</div>
+                        <div>{formatLat(ts.lat)}, {formatLon(ts.lon)}</div>
+                        <div className="capitalize" style={{ color }}>
+                          {ts.phase} · vor42 = {ts.vor42.toFixed(3)}
+                        </div>
+                        <div className="text-gray-500 text-[10px]">Click to select</div>
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                );
+              }
+
+              // Selected timestep: large highlighted marker
+              if (isThisSelected) {
+                return (
+                  <CircleMarker
+                    key={`ts-${selectedTrack.id}-${i}`}
+                    center={pos}
+                    radius={10}
+                    pathOptions={{
+                      fillColor: color,
+                      color: "#1e293b",
+                      weight: 3,
+                      fillOpacity: 1,
+                    }}
+                    eventHandlers={{
+                      click: (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        onTimestepSelect(ts);
+                      },
+                    }}
+                  >
+                    <Tooltip direction="top" offset={[0, -12]} opacity={0.9}>
+                      <div className="text-xs">
+                        <div className="font-semibold">{formatDatetime(ts.date)}</div>
+                        <div>{formatLat(ts.lat)}, {formatLon(ts.lon)}</div>
+                        <div className="capitalize" style={{ color }}>
+                          {ts.phase} · vor42 = {ts.vor42.toFixed(3)}
+                        </div>
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                );
+              }
+
+              // Normal state (no timestep selected yet)
               return (
                 <CircleMarker
                   key={`ts-${selectedTrack.id}-${i}`}
                   center={pos}
-                  radius={2}
+                  radius={6}
                   pathOptions={{
                     fillColor: color,
                     color: "#ffffff",
-                    weight: 0.5,
-                    fillOpacity: 0.18,
-                    opacity: 0.25,
-                  }}
-                  eventHandlers={{
-                    click: (e) => {
-                      L.DomEvent.stopPropagation(e);
-                      onTimestepSelect(ts);
-                    },
-                  }}
-                />
-              );
-            }
-
-            // Selected timestep: large highlighted marker
-            if (isThisSelected) {
-              return (
-                <CircleMarker
-                  key={`ts-${selectedTrack.id}-${i}`}
-                  center={pos}
-                  radius={9}
-                  pathOptions={{
-                    fillColor: color,
-                    color: "#1e293b",
-                    weight: 2.5,
-                    fillOpacity: 1,
+                    weight: 1.5,
+                    fillOpacity: 0.9,
                   }}
                   eventHandlers={{
                     click: (e) => {
@@ -249,7 +295,7 @@ export default function CycloneMap({
                     },
                   }}
                 >
-                  <Tooltip direction="top" offset={[0, -12]} opacity={0.9}>
+                  <Tooltip direction="top" offset={[0, -8]} opacity={0.9}>
                     <div className="text-xs">
                       <div className="font-semibold">{formatDatetime(ts.date)}</div>
                       <div>{formatLat(ts.lat)}, {formatLon(ts.lon)}</div>
@@ -260,39 +306,8 @@ export default function CycloneMap({
                   </Tooltip>
                 </CircleMarker>
               );
-            }
-
-            // Normal state (no timestep selected yet)
-            return (
-              <CircleMarker
-                key={`ts-${selectedTrack.id}-${i}`}
-                center={pos}
-                radius={4}
-                pathOptions={{
-                  fillColor: color,
-                  color: "#ffffff",
-                  weight: 1,
-                  fillOpacity: 0.9,
-                }}
-                eventHandlers={{
-                  click: (e) => {
-                    L.DomEvent.stopPropagation(e);
-                    onTimestepSelect(ts);
-                  },
-                }}
-              >
-                <Tooltip direction="top" offset={[0, -6]} opacity={0.9}>
-                  <div className="text-xs">
-                    <div className="font-semibold">{formatDatetime(ts.date)}</div>
-                    <div>{formatLat(ts.lat)}, {formatLon(ts.lon)}</div>
-                    <div className="capitalize" style={{ color }}>
-                      {ts.phase} · vor42 = {ts.vor42.toFixed(3)}
-                    </div>
-                  </div>
-                </Tooltip>
-              </CircleMarker>
-            );
-          })}
+            })}
+        </Pane>
 
         {/* ── Wind100 overlay (only when a timestep is selected) ───────────── */}
         {selectedTimestep && (

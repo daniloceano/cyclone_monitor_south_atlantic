@@ -158,11 +158,11 @@ export default function Wind100MapOverlay({
           <CircleMarker
             key={`w100-${qd}`}
             center={[qLat, qLon]}
-            radius={isGlobal ? 10 : 7}
+            radius={isGlobal ? 12 : 7}
             pathOptions={{
               fillColor: color,
-              color: "#ffffff",
-              weight: isGlobal ? 2.5 : 1.5,
+              color: isGlobal ? "#ea580c" : "#ffffff",  // Orange border for global max
+              weight: isGlobal ? 3 : 1.5,
               fillOpacity: 0.95,
             }}
           >
