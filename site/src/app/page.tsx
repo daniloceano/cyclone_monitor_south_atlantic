@@ -27,7 +27,7 @@ import {
   loadBasins,
   loadBasinIntersections,
 } from "@/lib/dataLoader";
-import { filterTracks, filterTracksByBasin, toggleValue } from "@/lib/filters";
+import { filterTracks, filterTracksByBasin } from "@/lib/filters";
 
 import FilterPanel from "@/components/FilterPanel";
 import TrackDetailPanel from "@/components/TrackDetailPanel";
@@ -139,14 +139,6 @@ export default function HomePage() {
     setWind100YearData(null);
   }, []);
 
-  // ── Basin selection from map click ─────────────────────────────────────────
-  const handleBasinSelectFromMap = useCallback((basinId: string) => {
-    setBasinFilter((prev) => ({
-      ...prev,
-      selectedBasins: toggleValue(prev.selectedBasins, basinId),
-    }));
-  }, []);
-
   // ── Logout ─────────────────────────────────────────────────────────────────
   const handleLogout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -238,7 +230,6 @@ export default function HomePage() {
             wind100Metric={wind100Metric}
             basinCollection={basinCollection}
             selectedBasins={basinFilter.selectedBasins}
-            onBasinSelect={handleBasinSelectFromMap}
           />
         </main>
       </div>

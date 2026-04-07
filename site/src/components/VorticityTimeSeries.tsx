@@ -62,6 +62,8 @@ export default function VorticityTimeSeries({
   }
 
   // Transform data for the chart
+  // Note: vor42 is stored as absolute value (positive), but Southern Hemisphere
+  // cyclones have negative vorticity. We multiply by -1 to show the physical value.
   const chartData: ChartDataPoint[] = timesteps.map((ts, idx) => ({
     idx,
     hour: idx, // Assuming hourly data
@@ -71,7 +73,7 @@ export default function VorticityTimeSeries({
       day: "numeric",
       hour: "2-digit",
     }),
-    vor42: ts.vor42,
+    vor42: -ts.vor42,  // Negative for Southern Hemisphere
     phase: ts.phase,
   }));
 

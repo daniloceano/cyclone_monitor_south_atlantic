@@ -97,7 +97,6 @@ interface CycloneMapProps {
   // Basin overlay — all optional
   basinCollection: BasinCollection | null;
   selectedBasins: string[];
-  onBasinSelect?: (basinId: string) => void;
 }
 
 // South Atlantic centre
@@ -127,7 +126,6 @@ export default function CycloneMap({
   wind100Metric,
   basinCollection,
   selectedBasins,
-  onBasinSelect,
 }: CycloneMapProps) {
   // Resolve wind100 data for the selected timestep (null-safe)
   const w100Entry =
@@ -167,39 +165,36 @@ export default function CycloneMap({
             <BasinLayer
               basins={basinCollection}
               selectedBasins={selectedBasins}
-              onBasinSelect={onBasinSelect}
             />
           </Pane>
         )}
 
         {/* ── Track polylines pane (above basins, below timestep markers) ──── */}
         <Pane name="tracks" style={{ zIndex: 500 }}>
-          {/* When a track is selected, only render the selected track.
-              When no track is selected, render all tracks with intensity colors.
-              The Fragment key forces a complete re-mount when selection state changes,
-              ensuring click handlers are properly re-initialized. */}
-          <React.Fragment key={selectedTrack ? `sel-${selectedTrack.id}` : 'all'}>
-            {tracks.map((track) => {
-              const isSelected = selectedTrack?.id === track.id;
-              
-              // If there's a selection and this isn't the selected track, don't render it
-              if (selectedTrack !== null && !isSelected) {
-                return null;
-              }
-              
+          {/* Render tracks based on selection state.
+              When selected, only render the selected track.
+              When not selected, render all tracks with intensity colors. */}
+          {selectedTrack ? (
+            // Single selected track mode
+            <TrackPolyline
+              key={`sel-${selectedTrack.id}`}
+              track={selectedTrack}
+              positions={selectedTrack.coords.map(
+                ([lon, lat]) => [lat, lon] as [number, number]
+              )}
+              style={selectedTrackStyle}
+              isSelected={true}
+              onSelect={onTrackSelect}
+              pane="tracks"
+            />
+          ) : (
+            // All tracks mode - each track gets a stable key
+            tracks.map((track) => {
               const positions = track.coords.map(
                 ([lon, lat]) => [lat, lon] as [number, number]
               );
-
-              // Compute style based on selection state
-              let style: { color: string; weight: number; opacity: number };
-              if (isSelected) {
-                style = selectedTrackStyle;
-              } else {
-                // No selection — use intensity-based color
-                const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);
-                style = { color: intensityColor, weight: DEFAULT_WEIGHT, opacity: DEFAULT_OPACITY };
-              }
+              const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);
+              const style = { color: intensityColor, weight: DEFAULT_WEIGHT, opacity: DEFAULT_OPACITY };
 
               return (
                 <TrackPolyline
@@ -207,13 +202,13 @@ export default function CycloneMap({
                   track={track}
                   positions={positions}
                   style={style}
-                  isSelected={isSelected}
+                  isSelected={false}
                   onSelect={onTrackSelect}
                   pane="tracks"
                 />
               );
-            })}
-          </React.Fragment>
+            })
+          )}
         </Pane>
 
         {/* ── Persistent panes — always in the DOM, never block clicks ───────── */}
@@ -498,84 +493,51 @@ function MapClickHandler({
 
 // ── Basin layer component ─────────────────────────────────────────────────────
 // Basin polygon styling constants
-const BASIN_STYLE_DEFAULT = {
+// Note: interactive: false allows clicks to pass through to tracks
+const BASIN_STYLE_DEFAULT: L.PathOptions = {
   color: "#0d9488",      // teal-600
   weight: 1.5,
   opacity: 0.6,
   fillColor: "#14b8a6",  // teal-500
   fillOpacity: 0.08,
+  interactive: false,    // Don't capture mouse events - let tracks handle them
 };
 
-const BASIN_STYLE_SELECTED = {
+const BASIN_STYLE_SELECTED: L.PathOptions = {
   color: "#0f766e",      // teal-700
   weight: 2.5,
   opacity: 0.9,
   fillColor: "#14b8a6",  // teal-500
   fillOpacity: 0.18,
+  interactive: false,
 };
 
-const BASIN_STYLE_HOVER = {
+const BASIN_STYLE_HOVER: L.PathOptions = {
   color: "#0d9488",      // teal-600
   weight: 2,
   opacity: 0.8,
   fillColor: "#14b8a6",  // teal-500
   fillOpacity: 0.15,
+  interactive: false,
 };
 
 interface BasinLayerProps {
   basins: BasinCollection;
   selectedBasins: string[];
-  onBasinSelect?: (basinId: string) => void;
 }
 
-function BasinLayer({ basins, selectedBasins, onBasinSelect }: BasinLayerProps) {
+function BasinLayer({ basins, selectedBasins }: BasinLayerProps) {
   const selectedSet = new Set(selectedBasins);
 
   // Style function for GeoJSON features
+  // Note: interactive: false is set in the style constants, so basins don't capture
+  // mouse events. This allows tracks to be clicked even when they overlap basins.
+  // Basin selection is done via the FilterPanel, not by clicking on the map.
   const getStyle = useCallback((feature?: GeoJSON.Feature): L.PathOptions => {
     if (!feature) return BASIN_STYLE_DEFAULT;
     const basinId = feature.id as string;
     return selectedSet.has(basinId) ? BASIN_STYLE_SELECTED : BASIN_STYLE_DEFAULT;
   }, [selectedSet]);
-
-  // Event handlers for each feature
-  const onEachFeature = useCallback((feature: GeoJSON.Feature, layer: L.Layer) => {
-    const basinId = feature.id as string;
-    const props = feature.properties as BasinFeature['properties'];
-    
-    // Add tooltip
-    layer.bindTooltip(
-      `<div class="text-xs">
-        <div class="font-semibold">${props.display_name}</div>
-        <div class="text-gray-500">Click to toggle filter</div>
-      </div>`,
-      { sticky: true, direction: "top", opacity: 0.9 }
-    );
-
-    // Add hover effects and click handler
-    // NOTE: We do NOT call bringToFront() on hover because that would bring
-    // the basin polygon above the track polylines, blocking track clicks.
-    layer.on({
-      mouseover: (e) => {
-        const target = e.target as L.Path;
-        if (!selectedSet.has(basinId)) {
-          target.setStyle(BASIN_STYLE_HOVER);
-        }
-      },
-      mouseout: (e) => {
-        const target = e.target as L.Path;
-        if (!selectedSet.has(basinId)) {
-          target.setStyle(BASIN_STYLE_DEFAULT);
-        }
-      },
-      click: (e) => {
-        L.DomEvent.stopPropagation(e);
-        if (onBasinSelect) {
-          onBasinSelect(basinId);
-        }
-      },
-    });
-  }, [selectedSet, onBasinSelect]);
 
   // Create a unique key that changes when selection changes
   // This forces GeoJSON component to re-render with new styles
@@ -586,7 +548,6 @@ function BasinLayer({ basins, selectedBasins, onBasinSelect }: BasinLayerProps) 
       key={key}
       data={basins as unknown as GeoJSON.GeoJsonObject}
       style={getStyle}
-      onEachFeature={onEachFeature}
     />
   );
 }
