@@ -81,3 +81,44 @@ export async function loadWind100Year(year: number): Promise<Wind100YearData | n
     return null;
   }
 }
+
+// ─── Sedimentary Basin loaders ────────────────────────────────────────────────
+
+import { BasinCollection, BasinIntersections } from "@/types/cyclone";
+
+let basinCollectionCache: BasinCollection | null = null;
+let basinIntersectionsCache: BasinIntersections | null = null;
+
+/**
+ * Load basins.geojson containing all sedimentary basin polygons.
+ * Cached after first load.
+ * Returns null (no throw) if the file is absent — basin data is optional.
+ */
+export async function loadBasins(): Promise<BasinCollection | null> {
+  if (basinCollectionCache) return basinCollectionCache;
+  try {
+    const res = await fetch("/data/basins.geojson");
+    if (!res.ok) return null;
+    basinCollectionCache = (await res.json()) as BasinCollection;
+    return basinCollectionCache;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load basin_intersections.json containing pre-computed track-basin intersections.
+ * Cached after first load.
+ * Returns null (no throw) if the file is absent — basin data is optional.
+ */
+export async function loadBasinIntersections(): Promise<BasinIntersections | null> {
+  if (basinIntersectionsCache) return basinIntersectionsCache;
+  try {
+    const res = await fetch("/data/basin_intersections.json");
+    if (!res.ok) return null;
+    basinIntersectionsCache = (await res.json()) as BasinIntersections;
+    return basinIntersectionsCache;
+  } catch {
+    return null;
+  }
+}

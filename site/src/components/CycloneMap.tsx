@@ -53,6 +53,7 @@ import {
   useMap,
   Tooltip,
   Pane,
+  GeoJSON,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -65,6 +66,8 @@ import {
   Wind100TimestepEntry,
   Wind100Meta,
   Wind100Metric,
+  BasinCollection,
+  BasinFeature,
 } from "@/types/cyclone";
 import { formatDatetime, formatLat, formatLon } from "@/lib/utils";
 import { getIntensityColor, INTENSITY_COLORS } from "@/lib/colors";
@@ -91,6 +94,10 @@ interface CycloneMapProps {
   wind100TrackData: Record<string, Wind100TimestepEntry> | null;
   wind100Meta: Wind100Meta | null;
   wind100Metric: Wind100Metric;
+  // Basin overlay — all optional
+  basinCollection: BasinCollection | null;
+  selectedBasins: string[];
+  onBasinSelect?: (basinId: string) => void;
 }
 
 // South Atlantic centre
@@ -118,6 +125,9 @@ export default function CycloneMap({
   wind100TrackData,
   wind100Meta,
   wind100Metric,
+  basinCollection,
+  selectedBasins,
+  onBasinSelect,
 }: CycloneMapProps) {
   // Module-level canvas renderer — shared across all polylines
   const canvasRef = useRef<L.Canvas | null>(null);
@@ -157,6 +167,17 @@ export default function CycloneMap({
           subdomains="abcd"
           maxZoom={19}
         />
+
+        {/* ── Sedimentary Basin polygons (rendered below tracks) ────────────── */}
+        {basinCollection && (
+          <Pane name="basins" style={{ zIndex: 400 }}>
+            <BasinLayer
+              basins={basinCollection}
+              selectedBasins={selectedBasins}
+              onBasinSelect={onBasinSelect}
+            />
+          </Pane>
+        )}
 
         {/* ── Track polylines ─────────────────────────────────────────────── */}
         {/* When a track is selected, only render the selected track.
@@ -474,4 +495,98 @@ function MapClickHandler({
   }, [map, onClear, hasSelection]);
 
   return null;
+}
+
+// ── Basin layer component ─────────────────────────────────────────────────────
+// Basin polygon styling constants
+const BASIN_STYLE_DEFAULT = {
+  color: "#0d9488",      // teal-600
+  weight: 1.5,
+  opacity: 0.6,
+  fillColor: "#14b8a6",  // teal-500
+  fillOpacity: 0.08,
+};
+
+const BASIN_STYLE_SELECTED = {
+  color: "#0f766e",      // teal-700
+  weight: 2.5,
+  opacity: 0.9,
+  fillColor: "#14b8a6",  // teal-500
+  fillOpacity: 0.18,
+};
+
+const BASIN_STYLE_HOVER = {
+  color: "#0d9488",      // teal-600
+  weight: 2,
+  opacity: 0.8,
+  fillColor: "#14b8a6",  // teal-500
+  fillOpacity: 0.15,
+};
+
+interface BasinLayerProps {
+  basins: BasinCollection;
+  selectedBasins: string[];
+  onBasinSelect?: (basinId: string) => void;
+}
+
+function BasinLayer({ basins, selectedBasins, onBasinSelect }: BasinLayerProps) {
+  const selectedSet = new Set(selectedBasins);
+
+  // Style function for GeoJSON features
+  const getStyle = useCallback((feature?: GeoJSON.Feature): L.PathOptions => {
+    if (!feature) return BASIN_STYLE_DEFAULT;
+    const basinId = feature.id as string;
+    return selectedSet.has(basinId) ? BASIN_STYLE_SELECTED : BASIN_STYLE_DEFAULT;
+  }, [selectedSet]);
+
+  // Event handlers for each feature
+  const onEachFeature = useCallback((feature: GeoJSON.Feature, layer: L.Layer) => {
+    const basinId = feature.id as string;
+    const props = feature.properties as BasinFeature['properties'];
+    
+    // Add tooltip
+    layer.bindTooltip(
+      `<div class="text-xs">
+        <div class="font-semibold">${props.display_name}</div>
+        <div class="text-gray-500">Click to toggle filter</div>
+      </div>`,
+      { sticky: true, direction: "top", opacity: 0.9 }
+    );
+
+    // Add hover effects and click handler
+    layer.on({
+      mouseover: (e) => {
+        const target = e.target as L.Path;
+        if (!selectedSet.has(basinId)) {
+          target.setStyle(BASIN_STYLE_HOVER);
+        }
+        target.bringToFront();
+      },
+      mouseout: (e) => {
+        const target = e.target as L.Path;
+        if (!selectedSet.has(basinId)) {
+          target.setStyle(BASIN_STYLE_DEFAULT);
+        }
+      },
+      click: (e) => {
+        L.DomEvent.stopPropagation(e);
+        if (onBasinSelect) {
+          onBasinSelect(basinId);
+        }
+      },
+    });
+  }, [selectedSet, onBasinSelect]);
+
+  // Create a unique key that changes when selection changes
+  // This forces GeoJSON component to re-render with new styles
+  const key = `basins-${selectedBasins.sort().join('-')}`;
+
+  return (
+    <GeoJSON
+      key={key}
+      data={basins as unknown as GeoJSON.GeoJsonObject}
+      style={getStyle}
+      onEachFeature={onEachFeature}
+    />
+  );
 }

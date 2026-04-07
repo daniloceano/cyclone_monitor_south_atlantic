@@ -13,6 +13,10 @@ import {
   Wind100Meta,
   Wind100Metric,
   Wind100TimestepEntry,
+  BasinCollection,
+  BasinIntersections,
+  BasinFilterState,
+  EMPTY_BASIN_FILTER,
 } from "@/types/cyclone";
 import {
   loadSummary,
@@ -20,8 +24,10 @@ import {
   getTrackDetail,
   loadWind100Meta,
   loadWind100Year,
+  loadBasins,
+  loadBasinIntersections,
 } from "@/lib/dataLoader";
-import { filterTracks } from "@/lib/filters";
+import { filterTracks, filterTracksByBasin, toggleValue } from "@/lib/filters";
 
 import FilterPanel from "@/components/FilterPanel";
 import TrackDetailPanel from "@/components/TrackDetailPanel";
@@ -58,12 +64,24 @@ export default function HomePage() {
   const [wind100YearData, setWind100YearData] = useState<Wind100YearData | null>(null);
   const [wind100Metric, setWind100Metric] = useState<Wind100Metric>("max");
 
-  // ── Load summary + wind100 meta on mount ───────────────────────────────────
+  // ── Basin state ────────────────────────────────────────────────────────────
+  const [basinCollection, setBasinCollection] = useState<BasinCollection | null>(null);
+  const [basinIntersections, setBasinIntersections] = useState<BasinIntersections | null>(null);
+  const [basinFilter, setBasinFilter] = useState<BasinFilterState>(EMPTY_BASIN_FILTER);
+
+  // ── Load summary + wind100 meta + basin data on mount ──────────────────────
   useEffect(() => {
-    Promise.all([loadSummary(), loadWind100Meta()])
-      .then(([data, meta]) => {
+    Promise.all([
+      loadSummary(),
+      loadWind100Meta(),
+      loadBasins(),
+      loadBasinIntersections(),
+    ])
+      .then(([data, meta, basins, intersections]) => {
         setSummaryData(data);
         setWind100Meta(meta); // null-safe: meta is null if file absent
+        setBasinCollection(basins); // null-safe: basins is null if file absent
+        setBasinIntersections(intersections); // null-safe
         setInitialLoading(false);
       })
       .catch((err: Error) => {
@@ -75,8 +93,12 @@ export default function HomePage() {
   // ── Filtered track list ────────────────────────────────────────────────────
   const filteredTracks = useMemo(() => {
     if (!summaryData) return [];
-    return filterTracks(summaryData.tracks, filters);
-  }, [summaryData, filters]);
+    // Apply standard filters (year, month, region)
+    let tracks = filterTracks(summaryData.tracks, filters);
+    // Apply basin filter
+    tracks = filterTracksByBasin(tracks, basinFilter, basinIntersections);
+    return tracks;
+  }, [summaryData, filters, basinFilter, basinIntersections]);
 
   // ── Per-track wind100 lookup for the selected track ────────────────────────
   const wind100TrackData = useMemo((): Record<string, Wind100TimestepEntry> | null => {
@@ -115,6 +137,14 @@ export default function HomePage() {
     setSelectedTimestep(null);
     setDetailError(null);
     setWind100YearData(null);
+  }, []);
+
+  // ── Basin selection from map click ─────────────────────────────────────────
+  const handleBasinSelectFromMap = useCallback((basinId: string) => {
+    setBasinFilter((prev) => ({
+      ...prev,
+      selectedBasins: toggleValue(prev.selectedBasins, basinId),
+    }));
   }, []);
 
   // ── Logout ─────────────────────────────────────────────────────────────────
@@ -168,6 +198,10 @@ export default function HomePage() {
             filters={filters}
             onFiltersChange={setFilters}
             filteredCount={filteredTracks.length}
+            basinCollection={basinCollection}
+            basinIntersections={basinIntersections}
+            basinFilter={basinFilter}
+            onBasinFilterChange={setBasinFilter}
           />
 
           {selectedTrack && (
@@ -202,6 +236,9 @@ export default function HomePage() {
             wind100TrackData={wind100TrackData}
             wind100Meta={wind100Meta}
             wind100Metric={wind100Metric}
+            basinCollection={basinCollection}
+            selectedBasins={basinFilter.selectedBasins}
+            onBasinSelect={handleBasinSelectFromMap}
           />
         </main>
       </div>

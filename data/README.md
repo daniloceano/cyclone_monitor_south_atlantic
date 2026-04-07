@@ -310,6 +310,106 @@ df["w100max_global_quad"]
 | `data/processed/*.txt` | **Versioned** | Small validation/coverage reports |
 | `data/interim/README.md` | **Versioned** | Documentation |
 | `data/README.md` | **Versioned** | This file |
+| `data/sedimentary_basins/` | **Versioned** | Brazilian offshore sedimentary basin shapefiles |
+
+---
+
+## 🗺️ Dataset 4: Brazilian Sedimentary Basins
+
+**Location**: `data/sedimentary_basins/`
+**Format**: ESRI Shapefiles (one per basin)
+**CRS**: EPSG:4326 (WGS84)
+
+### Purpose
+
+These shapefiles define the boundaries of Brazilian offshore sedimentary basins,
+enabling spatial filtering of cyclone tracks that pass through specific basins.
+
+### Directory Structure
+
+```
+data/sedimentary_basins/
+├── Barreirinhas_Mar-zip/
+│   ├── bacias_gishub_db.shp
+│   ├── bacias_gishub_db.shx
+│   ├── bacias_gishub_db.dbf
+│   ├── bacias_gishub_db.prj
+│   └── bacias_gishub_db.cst
+├── Campos_Mar-zip/
+│   └── ... (same structure)
+├── Santos-zip/
+│   └── ... (same structure)
+└── ... (16 basins total)
+```
+
+### Available Basins
+
+| Folder Name | Basin ID | Display Name |
+|-------------|----------|--------------|
+| Pelotas_Mar-zip | `pelotas` | Bacia de Pelotas |
+| Santos-zip | `santos` | Bacia de Santos |
+| Campos_Mar-zip | `campos` | Bacia de Campos |
+| Espírito Santo-zip | `espirito-santo` | Bacia do Espírito Santo |
+| Mucuri_Mar-zip | `mucuri` | Bacia de Mucuri |
+| Cumuruxatiba_Mar-zip | `cumuruxatiba` | Bacia de Cumuruxatiba |
+| Jequitinhonha_Mar-zip | `jequitinhonha` | Bacia de Jequitinhonha |
+| Camamu-Almada_Mar-zip | `camamu-almada` | Bacia de Camamu-Almada |
+| Jacuípe-zip | `jacuipe` | Bacia de Jacuípe |
+| SEAL_Mar-zip | `seal` | Bacia de Sergipe-Alagoas (SEAL) |
+| Pernambuco-Paraiba_Mar-zip | `pernambuco-paraiba` | Bacia de Pernambuco-Paraiba |
+| Potiguar_Mar-zip | `potiguar` | Bacia de Potiguar |
+| Ceará_Mar-zip | `ceara` | Bacia do Ceará |
+| Barreirinhas_Mar-zip | `barreirinhas` | Bacia de Barreirinhas |
+| Pará-Maranhão-zip | `para-maranhao` | Bacia do Pará-Maranhão |
+| Foz do Amazonas_Mar-zip | `foz-do-amazonas` | Bacia de Foz do Amazonas |
+
+### Shapefile Attribute Schema
+
+All basin shapefiles share the same attribute schema:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `feicao_id` | float | Feature ID from source database |
+| `situacao` | string | Always "Marítima" (offshore) |
+| `objectid` | int | Object ID |
+| `name` | string | Basin name (canonical) |
+| `code` | string | Always null |
+| `creation_d` | datetime | Creation date |
+| `modificati` | datetime | Modification date |
+| `camada_id` | int | Layer ID (always 10) |
+| `geometry` | Polygon | Basin boundary |
+
+### Processing Pipeline
+
+The shapefiles are processed into web-ready formats:
+
+```bash
+# Generate combined GeoJSON for the web app
+python3 scripts/process_sedimentary_basins.py
+
+# Compute track-basin intersections
+python3 scripts/compute_basin_intersections.py
+```
+
+**Generated outputs** (in `site/public/data/`):
+
+| File | Description | Size |
+|------|-------------|------|
+| `basins.geojson` | Combined basin polygons | ~614 KB |
+| `basin_intersections.json` | Pre-computed track-basin intersections | ~172 KB |
+
+### Intersection Statistics (1979–2020)
+
+| Basin | Center | Max Wind | Any |
+|-------|--------|----------|-----|
+| Pelotas | 1,188 | 1,552 | 1,847 |
+| Santos | 444 | 624 | 792 |
+| Campos | 149 | 409 | 462 |
+| Espírito Santo | 13 | 83 | 89 |
+| Others | <10 each | <25 each | <30 each |
+
+> **Note**: Southern basins (Pelotas, Santos, Campos) dominate because they lie
+> in the main extratropical cyclone track region.
 
 ---
 

@@ -1,14 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { FilterState, SummaryData, MONTH_NAMES } from "@/types/cyclone";
-import { toggleValue } from "@/lib/filters";
+import { 
+  FilterState, 
+  SummaryData, 
+  MONTH_NAMES, 
+  BasinFilterState,
+  BasinCollection,
+  BasinIntersections,
+  BasinFilterMode,
+  EMPTY_BASIN_FILTER,
+} from "@/types/cyclone";
+import { toggleValue, getBasinFilterModeLabel } from "@/lib/filters";
 
 interface FilterPanelProps {
   summaryData: SummaryData;
   filters: FilterState;
   onFiltersChange: (f: FilterState) => void;
   filteredCount: number;
+  // Basin filter props
+  basinCollection: BasinCollection | null;
+  basinIntersections: BasinIntersections | null;
+  basinFilter: BasinFilterState;
+  onBasinFilterChange: (f: BasinFilterState) => void;
 }
 
 export default function FilterPanel({
@@ -16,16 +30,24 @@ export default function FilterPanel({
   filters,
   onFiltersChange,
   filteredCount,
+  basinCollection,
+  basinIntersections,
+  basinFilter,
+  onBasinFilterChange,
 }: FilterPanelProps) {
-  const [expanded, setExpanded] = useState<"year" | "month" | "region" | null>("year");
+  const [expanded, setExpanded] = useState<"year" | "month" | "region" | "basin" | null>("year");
 
   const hasFilters =
     filters.years.length > 0 ||
     filters.months.length > 0 ||
     filters.regions.length > 0;
+  
+  const hasBasinFilter = basinFilter.selectedBasins.length > 0;
+  const hasAnyFilter = hasFilters || hasBasinFilter;
 
   function clearAll() {
     onFiltersChange({ years: [], months: [], regions: [] });
+    onBasinFilterChange(EMPTY_BASIN_FILTER);
   }
 
   function toggleYear(y: number) {
@@ -37,6 +59,39 @@ export default function FilterPanel({
   function toggleRegion(r: string) {
     onFiltersChange({ ...filters, regions: toggleValue(filters.regions, r) });
   }
+  function toggleBasin(basinId: string) {
+    onBasinFilterChange({
+      ...basinFilter,
+      selectedBasins: toggleValue(basinFilter.selectedBasins, basinId),
+    });
+  }
+  function setBasinMode(mode: BasinFilterMode) {
+    onBasinFilterChange({
+      ...basinFilter,
+      mode,
+    });
+  }
+  function clearBasinFilter() {
+    onBasinFilterChange(EMPTY_BASIN_FILTER);
+  }
+
+  // Get basin count for display
+  const getBasinTrackCount = (basinId: string): number => {
+    if (!basinIntersections) return 0;
+    const basinData = basinIntersections.basins[basinId];
+    if (!basinData) return 0;
+    // Return count based on current filter mode
+    switch (basinFilter.mode) {
+      case "center":
+        return basinData.stats.center_count;
+      case "wind_max":
+        return basinData.stats.wind_max_count;
+      case "any":
+        return basinData.stats.any_count;
+      default:
+        return basinData.stats.any_count;
+    }
+  };
 
   return (
     <div className="flex flex-col border-b border-gray-200 flex-shrink-0">
@@ -50,7 +105,7 @@ export default function FilterPanel({
             {filteredCount.toLocaleString()} tracks visible
           </p>
         </div>
-        {hasFilters && (
+        {hasAnyFilter && (
           <button
             onClick={clearAll}
             className="text-xs text-blue-600 hover:text-blue-700 transition"
@@ -134,6 +189,95 @@ export default function FilterPanel({
           ))}
         </div>
       </FilterSection>
+
+      {/* Basin filter */}
+      {basinCollection && (
+        <FilterSection
+          title="Sedimentary Basin"
+          active={hasBasinFilter}
+          expanded={expanded === "basin"}
+          onToggle={() => setExpanded(expanded === "basin" ? null : "basin")}
+          badgeCount={basinFilter.selectedBasins.length}
+        >
+          <div className="space-y-2">
+            {/* Filter mode selector */}
+            <div className="flex items-center gap-1 mb-2">
+              <span className="text-xs text-gray-500 mr-1">Filter by:</span>
+              {(["any", "center", "wind_max"] as BasinFilterMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setBasinMode(mode)}
+                  className={`text-[10px] px-1.5 py-0.5 rounded transition ${
+                    basinFilter.mode === mode
+                      ? "bg-teal-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                  title={
+                    mode === "center" 
+                      ? "Track center passes through basin" 
+                      : mode === "wind_max" 
+                      ? "Maximum wind position passes through basin"
+                      : "Either center or maximum wind passes through basin"
+                  }
+                >
+                  {getBasinFilterModeLabel(mode)}
+                </button>
+              ))}
+            </div>
+
+            {/* Clear basin filter */}
+            {hasBasinFilter && (
+              <button
+                onClick={clearBasinFilter}
+                className="text-[10px] text-teal-600 hover:text-teal-700 mb-1"
+              >
+                Clear basin filter
+              </button>
+            )}
+
+            {/* Basin list */}
+            <div className="flex flex-col gap-1 max-h-48 overflow-y-auto custom-scrollbar">
+              {basinCollection.features
+                .filter((basin) => {
+                  // Only show basins that have tracks (for selected mode)
+                  const count = getBasinTrackCount(basin.id);
+                  return count > 0;
+                })
+                .sort((a, b) => {
+                  // Sort by track count descending
+                  return getBasinTrackCount(b.id) - getBasinTrackCount(a.id);
+                })
+                .map((basin) => {
+                  const isSelected = basinFilter.selectedBasins.includes(basin.id);
+                  const trackCount = getBasinTrackCount(basin.id);
+                  return (
+                    <button
+                      key={basin.id}
+                      onClick={() => toggleBasin(basin.id)}
+                      className={`text-xs text-left px-2 py-1.5 rounded transition flex items-center justify-between ${
+                        isSelected
+                          ? "bg-teal-600 text-white"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      }`}
+                    >
+                      <span className="truncate mr-2">{basin.properties.display_name}</span>
+                      <span className={`text-[10px] ${isSelected ? "text-teal-200" : "text-gray-400"}`}>
+                        {trackCount}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
+
+            {/* Info text */}
+            <p className="text-[10px] text-gray-400 mt-1">
+              {basinFilter.mode === "center" && "Tracks where cyclone center passes through basin"}
+              {basinFilter.mode === "wind_max" && "Tracks where max wind (100m) passes through basin"}
+              {basinFilter.mode === "any" && "Tracks where center or max wind passes through basin"}
+            </p>
+          </div>
+        </FilterSection>
+      )}
     </div>
   );
 }

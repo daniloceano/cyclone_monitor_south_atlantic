@@ -266,3 +266,113 @@ export interface Wind100Meta {
 
 /** Metric selector for the wind100 visualization. */
 export type Wind100Metric = "max" | "p99";
+
+// ─── Sedimentary Basin types ──────────────────────────────────────────────────
+// These types support spatial filtering of cyclones by basin intersection.
+// Data is pre-computed by scripts/compute_basin_intersections.py.
+
+/**
+ * A single sedimentary basin feature from basins.geojson.
+ * Geometry is a GeoJSON Polygon or MultiPolygon.
+ */
+export interface BasinFeature {
+  type: "Feature";
+  id: string;
+  properties: {
+    /** Unique basin identifier (e.g., "santos", "pelotas"). */
+    id: string;
+    /** Original basin name from shapefile (e.g., "Santos", "Pelotas_Mar"). */
+    name: string;
+    /** User-friendly display name (e.g., "Bacia de Santos"). */
+    display_name: string;
+    /** Bounding box [minLon, minLat, maxLon, maxLat]. */
+    bbox: [number, number, number, number];
+    /** Approximate area in km². */
+    area_km2: number;
+  };
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+}
+
+/**
+ * Root structure of basins.geojson.
+ */
+export interface BasinCollection {
+  type: "FeatureCollection";
+  metadata: {
+    generated: string;
+    crs: string;
+    description: string;
+    source: string;
+    total_basins: number;
+  };
+  features: BasinFeature[];
+}
+
+/**
+ * Per-basin statistics from basin_intersections.json.
+ */
+export interface BasinStats {
+  /** Number of tracks whose center passes through this basin. */
+  center_count: number;
+  /** Number of tracks whose maximum wind position passes through this basin. */
+  wind_max_count: number;
+  /** Number of tracks that satisfy either condition. */
+  any_count: number;
+}
+
+/**
+ * Intersection data for a single track.
+ */
+export interface TrackBasinIntersection {
+  /** Basin IDs where the cyclone center passes through. */
+  center: string[];
+  /** Basin IDs where the maximum wind position passes through. */
+  wind_max: string[];
+  /** Union of center and wind_max (either condition). */
+  any: string[];
+}
+
+/**
+ * Root structure of basin_intersections.json.
+ */
+export interface BasinIntersections {
+  metadata: {
+    generated: string;
+    description: string;
+    total_tracks_with_intersections: number;
+    basins_used: number;
+  };
+  /** Per-basin metadata and statistics. */
+  basins: Record<string, {
+    name: string;
+    stats: BasinStats;
+  }>;
+  /** Track ID (as string) -> intersection data. */
+  tracks: Record<string, TrackBasinIntersection>;
+}
+
+/**
+ * Basin filter mode: determines how spatial intersection is evaluated.
+ * - "center": Track center passes through the basin
+ * - "wind_max": Maximum wind position passes through the basin
+ * - "any": Either center OR wind_max passes through the basin
+ */
+export type BasinFilterMode = "center" | "wind_max" | "any";
+
+/**
+ * State for basin-based spatial filtering.
+ */
+export interface BasinFilterState {
+  /** Selected basin IDs (empty = no filter). */
+  selectedBasins: string[];
+  /** Filter mode. */
+  mode: BasinFilterMode;
+}
+
+/**
+ * Default (empty) basin filter state.
+ */
+export const EMPTY_BASIN_FILTER: BasinFilterState = {
+  selectedBasins: [],
+  mode: "any",
+};

@@ -136,6 +136,71 @@ Same pattern for p99 files (`w100p99_` prefix, `_p99_` in source names).
 
 ---
 
+### `scripts/process_sedimentary_basins.py`
+
+**Purpose**: Process Brazilian sedimentary basin shapefiles into web-ready GeoJSON
+
+**Input**: `data/sedimentary_basins/{basin_folder}/bacias_gishub_db.shp` (16 basins)
+
+**Processing**:
+- Reads all shapefiles from `data/sedimentary_basins/`
+- Validates geometries (fixes invalid ones using `shapely.validation.make_valid`)
+- Verifies CRS is EPSG:4326 (WGS84); reprojects if needed
+- Normalizes basin IDs (e.g., "Santos" → "santos", "Espírito Santo" → "espirito-santo")
+- Creates user-friendly display names (e.g., "Bacia de Santos", "Bacia do Ceará")
+- Computes bounding boxes for each basin
+
+**Output**:
+- `site/public/data/basins.geojson` (~614 KB) — Combined basin polygons
+- `site/public/data/basins.debug.geojson` — Pretty-printed version for debugging
+
+**Usage**:
+```bash
+python3 scripts/process_sedimentary_basins.py
+```
+
+---
+
+### `scripts/compute_basin_intersections.py`
+
+**Purpose**: Pre-compute which basins each cyclone track intersects
+
+**Input**:
+- `site/public/data/basins.geojson` — Basin polygons
+- `site/public/data/summary.json` — Track coordinates
+- `site/public/data/wind100/{year}.json` — Maximum wind positions
+
+**Processing**:
+- For each track, tests point-in-polygon for:
+  - **Center positions**: cyclone center at each timestep
+  - **Maximum wind positions**: position of global wind100_max at each timestep
+- Uses bounding box pre-filtering for efficiency
+- Computes per-basin statistics (count of tracks by filter mode)
+
+**Output**: `site/public/data/basin_intersections.json` (~172 KB)
+
+**Output Schema**:
+```json
+{
+  "metadata": { ... },
+  "basins": {
+    "pelotas": { "name": "Bacia de Pelotas", "stats": { "center_count": 1188, "wind_max_count": 1552, "any_count": 1847 } },
+    ...
+  },
+  "tracks": {
+    "19790001": { "center": ["pelotas"], "wind_max": ["pelotas", "santos"], "any": ["pelotas", "santos"] },
+    ...
+  }
+}
+```
+
+**Usage**:
+```bash
+python3 scripts/compute_basin_intersections.py
+```
+
+---
+
 ### `scripts/data/merge_wind100.py`
 
 **Purpose**: Merge wind100 statistics with main cyclone data into per-track Parquet files
@@ -200,9 +265,29 @@ data/processed/tracks_south_atlantic_consolidated.csv (143 MB)
 site/public/data/             data/processed/tracks_by_id/
   summary.json                  {YYYY}/{MM:02d}/{track_id}.parquet
   details/{year}.json
+  wind100/{year}.json
         │
         ↓
     Web Application
+
+
+data/sedimentary_basins/      site/public/data/
+  {basin}/bacias_gishub_db.*     │
+        │                        │
+        ↓  process_sedimentary_basins.py
+        │                        │
+        └──────────────────────→ basins.geojson (614 KB)
+                                 │
+        + summary.json           │
+        + wind100/{year}.json    │
+                │                │
+                ↓  compute_basin_intersections.py
+                │                │
+                └──────────────→ basin_intersections.json (172 KB)
+                                 │
+                                 ↓
+                             Web Application
+                         (basin filtering)
 ```
 
 ---
