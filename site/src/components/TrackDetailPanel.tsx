@@ -27,6 +27,7 @@ import dynamic from "next/dynamic";
 // Dynamic imports for chart components (client-side only, no SSR)
 const LECTimeSeries = dynamic(() => import("./LECTimeSeries"), { ssr: false });
 const LECBoxDiagram = dynamic(() => import("./LECBoxDiagram"), { ssr: false });
+const VorticityTimeSeries = dynamic(() => import("./VorticityTimeSeries"), { ssr: false });
 
 interface TrackDetailPanelProps {
   track: TrackSummary;
@@ -158,6 +159,20 @@ export default function TrackDetailPanel({
             ))}
           </div>
         </div>
+
+        {/* ── Vorticity Time Series ───────────────────────────────────────── */}
+        {timesteps && timesteps.length > 0 && !loading && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-2.5">
+            <p className="text-xs font-semibold text-indigo-700 mb-2">
+              Central Vorticity Time Series
+            </p>
+            <VorticityTimeSeries
+              timesteps={timesteps}
+              selectedTimestep={selectedTimestep}
+              onTimestepSelect={(ts) => onTimestepSelect(ts)}
+            />
+          </div>
+        )}
 
         {/* ── Loading / error ────────────────────────────────────────────── */}
         {loading && (

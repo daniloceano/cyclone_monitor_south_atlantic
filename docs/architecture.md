@@ -68,12 +68,21 @@ page.tsx  (state owner)
 ├── aside
 │   ├── FilterPanel.tsx
 │   └── TrackDetailPanel.tsx  (conditional)
+│       ├── VorticityTimeSeries.tsx  (vorticity lifecycle chart)
+│       ├── LECTimeSeries.tsx  (energy cycle time series)
+│       └── LECBoxDiagram.tsx  (energy box diagram)
 └── main
     └── CycloneMap.tsx  (dynamic import, ssr: false)
         ├── MapContainer (Leaflet)
-        │   ├── TileLayer (CARTO dark)
-        │   ├── TrackPolyline × N  (canvas renderer)
-        │   ├── CircleMarker × M  (selected track timesteps only)
+        │   ├── TileLayer (CARTO light)
+        │   ├── Pane "basins" (z-index 400)
+        │   │   └── BasinLayer.tsx  (GeoJSON sedimentary basins)
+        │   ├── Pane "tracks" (z-index 500)
+        │   │   └── TrackPolyline × N  (canvas renderer)
+        │   ├── Pane "timestep-markers" (z-index 650)
+        │   │   └── CircleMarker × M  (selected track timesteps only)
+        │   ├── Pane "wind100-markers" (z-index 700)
+        │   │   └── Wind100MapOverlay.tsx  (wind quadrant visualization)
         │   └── MapClickHandler
         └── Tooltip (Leaflet native)
 
@@ -86,6 +95,20 @@ about/page.tsx  (standalone)
     ├── Limitations
     └── References
 ```
+
+### Layer z-index ordering
+
+The map uses explicit Leaflet Panes to control layer ordering:
+
+| Pane | z-index | Contents |
+|------|---------|----------|
+| basins | 400 | Sedimentary basin polygons (below tracks) |
+| tracks | 500 | Cyclone track polylines |
+| timestep-markers | 650 | Timestep circle markers |
+| wind100-markers | 700 | Wind100 quadrant visualization |
+
+This ensures tracks are always clickable above basin polygons, and timestep
+markers are always visible above tracks.
 
 ## State management
 
@@ -109,6 +132,30 @@ state library — the component tree is shallow enough that prop drilling is cle
 | Coordinate downsampling (max 120 pts/track) | Reduces `summary.json` by ~40% with imperceptible visual loss at map zoom levels 3–7 |
 | Lazy year-file loading | The 43 year detail files (~1.8 MB each) are only fetched when a user clicks a track from that year |
 | Module-level JS cache for loaded files | `Map<year, YearDetails>` in `dataLoader.ts` avoids re-fetching when navigating between tracks in the same year |
+
+## Visualization components
+
+### VorticityTimeSeries
+
+Displays the central vorticity (vor42) time series with lifecycle phase visualization:
+
+- **Data source**: `timesteps[].vor42` and `timesteps[].phase` from year detail files
+- **X-axis**: Hour index (0 to n-1 for n timesteps)
+- **Y-axis**: vor42 (×10⁻⁵ s⁻¹)
+- **Phase visualization**: Colored background regions using `ReferenceArea` from recharts
+- **Interactive**: Click on chart to select timestep
+
+Phase colors follow the CycloPhaser convention (de Souza et al., IJC 2024):
+- Incipient: `#b1cff2` (light blue)
+- Intensification: `#fad99b` (light orange)
+- Mature: `#ea9393` (light red)
+- Decay: `#ccd3bf` (light green-gray)
+- Dissipation: `#9e9e9e` (gray)
+
+### LECTimeSeries / LECBoxDiagram
+
+Energy cycle visualizations from de Souza et al. (Climate Dynamics 2025).
+See the About page for methodology details.
 
 ## SSR / Leaflet compatibility
 

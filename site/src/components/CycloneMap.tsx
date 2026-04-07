@@ -179,43 +179,46 @@ export default function CycloneMap({
           </Pane>
         )}
 
-        {/* ── Track polylines ─────────────────────────────────────────────── */}
-        {/* When a track is selected, only render the selected track.
-            When no track is selected, render all tracks with intensity colors. */}
-        {tracks.map((track) => {
-          const isSelected = selectedTrack?.id === track.id;
-          
-          // If there's a selection and this isn't the selected track, don't render it
-          if (selectedTrack !== null && !isSelected) {
-            return null;
-          }
-          
-          const positions = track.coords.map(
-            ([lon, lat]) => [lat, lon] as [number, number]
-          );
+        {/* ── Track polylines pane (above basins, below timestep markers) ──── */}
+        <Pane name="tracks" style={{ zIndex: 500 }}>
+          {/* When a track is selected, only render the selected track.
+              When no track is selected, render all tracks with intensity colors. */}
+          {tracks.map((track) => {
+            const isSelected = selectedTrack?.id === track.id;
+            
+            // If there's a selection and this isn't the selected track, don't render it
+            if (selectedTrack !== null && !isSelected) {
+              return null;
+            }
+            
+            const positions = track.coords.map(
+              ([lon, lat]) => [lat, lon] as [number, number]
+            );
 
-          // Compute style based on selection state
-          let style: { color: string; weight: number; opacity: number };
-          if (isSelected) {
-            style = selectedTrackStyle;
-          } else {
-            // No selection — use intensity-based color
-            const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);
-            style = { color: intensityColor, weight: DEFAULT_WEIGHT, opacity: DEFAULT_OPACITY };
-          }
+            // Compute style based on selection state
+            let style: { color: string; weight: number; opacity: number };
+            if (isSelected) {
+              style = selectedTrackStyle;
+            } else {
+              // No selection — use intensity-based color
+              const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);
+              style = { color: intensityColor, weight: DEFAULT_WEIGHT, opacity: DEFAULT_OPACITY };
+            }
 
-          return (
-            <TrackPolyline
-              key={track.id}
-              track={track}
-              positions={positions}
-              style={style}
-              renderer={renderer}
-              isSelected={isSelected}
-              onSelect={onTrackSelect}
-            />
-          );
-        })}
+            return (
+              <TrackPolyline
+                key={track.id}
+                track={track}
+                positions={positions}
+                style={style}
+                renderer={renderer}
+                isSelected={isSelected}
+                onSelect={onTrackSelect}
+                pane="tracks"
+              />
+            );
+          })}
+        </Pane>
 
         {/* ── Persistent panes — always in the DOM, never block clicks ───────── */}
         <Pane name="wind100-markers" style={{ zIndex: 700 }} />
@@ -409,6 +412,7 @@ interface TrackPolylineProps {
   renderer: L.Canvas;
   isSelected: boolean;
   onSelect: (t: TrackSummary) => void;
+  pane: string;
 }
 
 function TrackPolyline({
@@ -418,6 +422,7 @@ function TrackPolyline({
   renderer,
   isSelected,
   onSelect,
+  pane,
 }: TrackPolylineProps) {
   const polylineRef = useRef<L.Polyline | null>(null);
 
@@ -449,7 +454,7 @@ function TrackPolyline({
     <Polyline
       ref={polylineRef}
       positions={positions}
-      pathOptions={{ ...style, renderer }}
+      pathOptions={{ ...style, renderer, pane }}
       eventHandlers={{
         click: handleClick,
         mouseover: handleMouseover,
@@ -554,13 +559,14 @@ function BasinLayer({ basins, selectedBasins, onBasinSelect }: BasinLayerProps) 
     );
 
     // Add hover effects and click handler
+    // NOTE: We do NOT call bringToFront() on hover because that would bring
+    // the basin polygon above the track polylines, blocking track clicks.
     layer.on({
       mouseover: (e) => {
         const target = e.target as L.Path;
         if (!selectedSet.has(basinId)) {
           target.setStyle(BASIN_STYLE_HOVER);
         }
-        target.bringToFront();
       },
       mouseout: (e) => {
         const target = e.target as L.Path;
