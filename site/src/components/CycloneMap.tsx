@@ -44,7 +44,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -129,13 +129,6 @@ export default function CycloneMap({
   selectedBasins,
   onBasinSelect,
 }: CycloneMapProps) {
-  // Module-level canvas renderer — shared across all polylines
-  const canvasRef = useRef<L.Canvas | null>(null);
-  if (!canvasRef.current) {
-    canvasRef.current = L.canvas({ padding: 0.5 });
-  }
-  const renderer = canvasRef.current;
-
   // Resolve wind100 data for the selected timestep (null-safe)
   const w100Entry =
     selectedTimestep && wind100TrackData
@@ -182,42 +175,45 @@ export default function CycloneMap({
         {/* ── Track polylines pane (above basins, below timestep markers) ──── */}
         <Pane name="tracks" style={{ zIndex: 500 }}>
           {/* When a track is selected, only render the selected track.
-              When no track is selected, render all tracks with intensity colors. */}
-          {tracks.map((track) => {
-            const isSelected = selectedTrack?.id === track.id;
-            
-            // If there's a selection and this isn't the selected track, don't render it
-            if (selectedTrack !== null && !isSelected) {
-              return null;
-            }
-            
-            const positions = track.coords.map(
-              ([lon, lat]) => [lat, lon] as [number, number]
-            );
+              When no track is selected, render all tracks with intensity colors.
+              The Fragment key forces a complete re-mount when selection state changes,
+              ensuring click handlers are properly re-initialized. */}
+          <React.Fragment key={selectedTrack ? `sel-${selectedTrack.id}` : 'all'}>
+            {tracks.map((track) => {
+              const isSelected = selectedTrack?.id === track.id;
+              
+              // If there's a selection and this isn't the selected track, don't render it
+              if (selectedTrack !== null && !isSelected) {
+                return null;
+              }
+              
+              const positions = track.coords.map(
+                ([lon, lat]) => [lat, lon] as [number, number]
+              );
 
-            // Compute style based on selection state
-            let style: { color: string; weight: number; opacity: number };
-            if (isSelected) {
-              style = selectedTrackStyle;
-            } else {
-              // No selection — use intensity-based color
-              const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);
-              style = { color: intensityColor, weight: DEFAULT_WEIGHT, opacity: DEFAULT_OPACITY };
-            }
+              // Compute style based on selection state
+              let style: { color: string; weight: number; opacity: number };
+              if (isSelected) {
+                style = selectedTrackStyle;
+              } else {
+                // No selection — use intensity-based color
+                const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);
+                style = { color: intensityColor, weight: DEFAULT_WEIGHT, opacity: DEFAULT_OPACITY };
+              }
 
-            return (
-              <TrackPolyline
-                key={track.id}
-                track={track}
-                positions={positions}
-                style={style}
-                renderer={renderer}
-                isSelected={isSelected}
-                onSelect={onTrackSelect}
-                pane="tracks"
-              />
-            );
-          })}
+              return (
+                <TrackPolyline
+                  key={track.id}
+                  track={track}
+                  positions={positions}
+                  style={style}
+                  isSelected={isSelected}
+                  onSelect={onTrackSelect}
+                  pane="tracks"
+                />
+              );
+            })}
+          </React.Fragment>
         </Pane>
 
         {/* ── Persistent panes — always in the DOM, never block clicks ───────── */}
@@ -409,7 +405,6 @@ interface TrackPolylineProps {
   track: TrackSummary;
   positions: [number, number][];
   style: { color: string; weight: number; opacity: number };
-  renderer: L.Canvas;
   isSelected: boolean;
   onSelect: (t: TrackSummary) => void;
   pane: string;
@@ -419,7 +414,6 @@ function TrackPolyline({
   track,
   positions,
   style,
-  renderer,
   isSelected,
   onSelect,
   pane,
@@ -454,7 +448,7 @@ function TrackPolyline({
     <Polyline
       ref={polylineRef}
       positions={positions}
-      pathOptions={{ ...style, renderer, pane }}
+      pathOptions={{ ...style, pane }}
       eventHandlers={{
         click: handleClick,
         mouseover: handleMouseover,
