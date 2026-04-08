@@ -30,6 +30,7 @@ import {
 import { filterTracks, filterTracksByBasin } from "@/lib/filters";
 
 import FilterPanel from "@/components/FilterPanel";
+import AvailableTracksList from "@/components/AvailableTracksList";
 import TrackDetailPanel from "@/components/TrackDetailPanel";
 import Header from "@/components/Header";
 
@@ -196,7 +197,14 @@ export default function HomePage() {
             onBasinFilterChange={setBasinFilter}
           />
 
-          {selectedTrack && (
+           {!selectedTrack && (
+             <AvailableTracksList
+               tracks={filteredTracks}
+               onTrackSelect={handleTrackSelect}
+             />
+           )}
+
+           {selectedTrack && (
             <TrackDetailPanel
               track={selectedTrack}
               timesteps={timesteps}

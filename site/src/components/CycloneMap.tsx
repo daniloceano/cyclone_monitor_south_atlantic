@@ -110,7 +110,10 @@ const STYLE_SELECTED_DIM = { color: "#ea580c", weight: 1.5, opacity: 0.12 }; // 
 
 // Default style for unselected tracks (intensity color applied separately)
 const DEFAULT_WEIGHT = 1;
+const INCREASED_WEIGHT = 2.5; // Used when few tracks are visible
 const DEFAULT_OPACITY = 0.45;
+// Threshold: if fewer than this many tracks visible, increase weight for easier clicking
+const FEW_TRACKS_THRESHOLD = 10;
 
 export default function CycloneMap({
   tracks,
@@ -141,6 +144,10 @@ export default function CycloneMap({
 
   // Dim the polyline further when a specific timestep is focused
   const selectedTrackStyle = selectedTimestep ? STYLE_SELECTED_DIM : STYLE_SELECTED;
+
+  // When few tracks are visible (due to filters), increase stroke weight for easier clicking
+  const hasFewTracks = !selectedTrack && tracks.length < FEW_TRACKS_THRESHOLD;
+  const effectiveWeight = hasFewTracks ? INCREASED_WEIGHT : DEFAULT_WEIGHT;
 
   return (
     <div className="relative w-full h-full">
@@ -194,7 +201,7 @@ export default function CycloneMap({
                 ([lon, lat]) => [lat, lon] as [number, number]
               );
               const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);
-              const style = { color: intensityColor, weight: DEFAULT_WEIGHT, opacity: DEFAULT_OPACITY };
+              const style = { color: intensityColor, weight: effectiveWeight, opacity: DEFAULT_OPACITY };
 
               return (
                 <TrackPolyline
