@@ -53,6 +53,7 @@ import pandas as pd
 import numpy as np
 import json
 import math
+from collections import Counter
 from pathlib import Path
 from datetime import datetime
 
@@ -62,6 +63,10 @@ from datetime import datetime
 INPUT_CSV_CONSOLIDATED = Path("data/processed/tracks_south_atlantic_consolidated.csv")
 # Fallback input: legacy raw CSV (for backward compatibility)
 INPUT_CSV_LEGACY = Path("data/raw/tracks_SAt_filtered_with_energetics.csv")
+# Per-cyclone CPS classification (optional).
+# PROVENANCE PLACEHOLDER: produced by paper_energy_patterns and copied by hand;
+# no Zenodo DOI minted yet. See CPS_PARAMS_FILE in scripts/data/preprocess_data.py.
+INPUT_CSV_CPS_CLASS = Path("data/raw/cps_classification_SAt.csv")
 OUTPUT_DIR  = Path("site/public/data")
 DETAILS_DIR = OUTPUT_DIR / "details"
 
@@ -69,6 +74,7 @@ DETAILS_DIR = OUTPUT_DIR / "details"
 COORD_DECIMALS      = 2   # ~1 km — sufficient for trajectory visualisation
 VOR42_DECIMALS      = 4
 ENERGETICS_DECIMALS = 3
+CPS_DECIMALS        = 2   # B in m, VTL/VTU dimensionless — 2 dp is ample
 MAX_COORDS_PER_TRACK = 120
 
 # ─── Region name mapping (source data uses short codes) ────────────────────────
@@ -79,6 +85,39 @@ REGION_DISPLAY_NAMES = {
     "LA-PLATA": "La Plata River Discharge",
     "SE-BR": "Southeast Brazil",
 }
+
+# ─── CPS classification display names ─────────────────────────────────────────
+# Per-cyclone structural classification from the Cyclone Phase Space.
+# Codes come from cps_classification_SAt.csv → phase_class.
+CPS_CLASS_LABELS = {
+    "EC":           "Extratropical",
+    "SC":           "Subtropical",
+    "TC":           "Tropical",
+    "ST":           "Subtropical transition (EC→SC)",
+    "SD":           "Subtropical decay (SC→EC)",
+    "TT":           "Tropical transition",
+    "ET":           "Extratropical transition",
+    "EC_like":      "Extratropical-like",
+    "SC_like":      "Hybrid-like",
+    "TC_like":      "Warm-core-like",
+    "undetermined": "Undetermined",
+    "no_cps_data":  "No CPS data",
+}
+
+# Coarse grouping used by the type filter, so the UI can offer a short list
+# without hiding the detail (the exact phase_class is kept per track).
+CPS_CLASS_GROUPS = {
+    "EC": "Extratropical", "EC_like": "Extratropical",
+    "SC": "Subtropical", "SC_like": "Subtropical",
+    "TC": "Tropical", "TC_like": "Tropical",
+    "ST": "Transition", "SD": "Transition", "TT": "Transition", "ET": "Transition",
+    "undetermined": "Undetermined",
+    "no_cps_data": "No CPS data",
+}
+
+# Number of histogram bins for the intensity (vor42) distribution shown in the
+# filter panel. 60 keeps the PDF smooth without bloating summary.json.
+INTENSITY_PDF_BINS = 60
 
 
 # ─── Genesis Region (fallback for legacy data without region column) ──────────
@@ -168,6 +207,78 @@ def quantile_label(value: float, thresholds: dict) -> str:
     return "bottom 50%"
 
 
+def load_cps_classification(path: Path) -> dict:
+    """
+    Load the per-cyclone CPS classification, keyed by track_id.
+
+    Returns {} when the file is absent — CPS is optional and the site degrades
+    gracefully (the type filter simply reports no data).
+
+    Each entry carries:
+        cls        phase_class code (EC, SC, ST, ...)
+        label      human-readable expansion
+        group      coarse grouping for the filter UI
+        seq        state_sequence, e.g. "EC->SC" (None when absent)
+        warm_secl  True when the identification guards rejected at least one
+                   run as a Shapiro–Keyser warm seclusion. This is NOT a
+                   phase_class: it is a property of the rejected runs, exposed
+                   separately because it is scientifically interesting on its own.
+    """
+    if not path.exists():
+        print(f"  ⚠ CPS classification not found: {path}")
+        print("    Cyclone type filter will be empty.")
+        return {}
+
+    df = pd.read_csv(path)
+    print(f"  CPS classification: {len(df):,} cyclones")
+
+    out = {}
+    for _, r in df.iterrows():
+        code = str(r.get("phase_class", "no_cps_data"))
+        n_ws = r.get("n_warm_seclusions", 0)
+        try:
+            n_ws = float(n_ws)
+        except (TypeError, ValueError):
+            n_ws = 0.0
+        seq = r.get("state_sequence")
+        if isinstance(seq, float) and math.isnan(seq):
+            seq = None
+        out[int(r["track_id"])] = {
+            "cls":       code,
+            "label":     CPS_CLASS_LABELS.get(code, code),
+            "group":     CPS_CLASS_GROUPS.get(code, "Undetermined"),
+            "seq":       str(seq) if seq is not None else None,
+            "warm_secl": bool(n_ws and n_ws > 0),
+        }
+    return out
+
+
+def build_intensity_pdf(values: np.ndarray, thresholds: dict) -> dict:
+    """
+    Histogram of track-level max_vor42, for the intensity filter's PDF display.
+
+    Returns bin edges, the normalised density, and raw counts. The density is a
+    proper probability density (integrates to 1 over the value axis), so the
+    curve is comparable regardless of bin count.
+    """
+    counts, edges = np.histogram(values, bins=INTENSITY_PDF_BINS)
+    widths = np.diff(edges)
+    total = counts.sum()
+    density = (counts / total / widths) if total > 0 else np.zeros_like(counts, dtype=float)
+
+    return {
+        "bin_edges": [round(float(e), 4) for e in edges],
+        "counts":    [int(c) for c in counts],
+        "density":   [round(float(d), 6) for d in density],
+        "min":       round(float(values.min()), 4),
+        "max":       round(float(values.max()), 4),
+        "n":         int(values.size),
+        # Repeated here so the chart can draw quantile guide lines without
+        # cross-referencing another object.
+        "quantiles": {k: round(float(v), 4) for k, v in thresholds.items()},
+    }
+
+
 def downsample_coords(lons, lats, max_pts: int = MAX_COORDS_PER_TRACK):
     n = len(lons)
     if n <= max_pts:
@@ -231,6 +342,30 @@ def main():
     }
     print(f"  vor42 thresholds: { {k: round(v,3) for k,v in thresholds.items()} }")
 
+    # ── Intensity PDF (for the filter panel's distribution chart) ────────────
+    intensity_pdf = build_intensity_pdf(track_max.to_numpy(dtype="float64"), thresholds)
+    print(f"  intensity PDF: {INTENSITY_PDF_BINS} bins over "
+          f"[{intensity_pdf['min']}, {intensity_pdf['max']}]")
+
+    # ── Per-cyclone CPS classification ──────────────────────────────────────
+    print("  Loading CPS classification …")
+    cps_class_map = load_cps_classification(INPUT_CSV_CPS_CLASS)
+
+    # ── Processing level ─────────────────────────────────────────────────────
+    # Every cyclone in the consolidated CSV is fully processed (it carries LEC,
+    # lifecycle phases and a genesis region — the LEC computation is in fact the
+    # filter that produced this catalogue).
+    #
+    # PLACEHOLDER: the full unfiltered Gramcianinov catalogue
+    # (Mendeley DOI 10.17632/kwcvfr52hp.4) is not yet ingested, so no
+    # "raw"-level cyclone exists here yet. The flag and the whole downstream
+    # filter are already in place, so raw tracks light up the moment they are
+    # merged in. See docs/data-documentation.md § Processing levels.
+    # Note: deliberately NOT named has_lec — that name is reused as a per-row
+    # flag inside the timestep loop below.
+    dataset_has_lec = "Kz" in df.columns
+    dataset_has_period = "period" in df.columns
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     DETAILS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -270,7 +405,24 @@ def main():
         q_label        = quantile_label(max_vor42, thresholds)
         coords         = downsample_coords(grp["lon"].tolist(), grp["lat"].tolist())
 
-        summaries.append({
+        # Processing level: "processed" when the cyclone carries the full
+        # diagnostic stack (LEC + lifecycle phases). See the PLACEHOLDER note
+        # above regarding raw catalogue tracks.
+        # A track counts as processed when it carries the diagnostic stack
+        # ANYWHERE along its life — not at its first timestep. The lifecycle
+        # labeller legitimately leaves `period` empty at the very start of many
+        # tracks, so testing only the first row misclassified ~70% of the
+        # catalogue as raw.
+        track_processed = bool(
+            dataset_has_lec
+            and dataset_has_period
+            and grp["Kz"].notna().any()
+            and grp["period"].notna().any()
+        )
+
+        cps_info = cps_class_map.get(int(tid))
+
+        entry = {
             "id":             int(tid),
             "year":           year,
             "month":          genesis_month,
@@ -284,8 +436,20 @@ def main():
             "genesis_region": genesis_region,
             "max_vor42":      round(max_vor42, VOR42_DECIMALS),
             "quantile":       q_label,
+            "processed":      track_processed,
             "coords":         coords,
-        })
+        }
+
+        if cps_info:
+            entry["cps_class"] = cps_info["cls"]
+            entry["cps_label"] = cps_info["label"]
+            entry["cps_group"] = cps_info["group"]
+            if cps_info["seq"]:
+                entry["cps_seq"] = cps_info["seq"]
+            if cps_info["warm_secl"]:
+                entry["warm_seclusion"] = True
+
+        summaries.append(entry)
 
         # Per-timestep data (loaded on demand via details/{year}.json)
         # Use pre-computed phases if available, otherwise compute heuristically
@@ -318,6 +482,29 @@ def main():
                 raw = row.get("lec_original")
                 if raw is not None and not (isinstance(raw, float) and math.isnan(raw)):
                     ts["lec_original"] = bool(raw)
+
+            # ── Cyclone Phase Space ──────────────────────────────────────────
+            # Emitted only when the phase-space parameters exist at this
+            # timestep (original or interpolated). cps_original mirrors
+            # lec_original: True = computed here, False = interpolated.
+            cps_b = safe_float(row.get("cps_B"), CPS_DECIMALS)
+            if cps_b is not None:
+                ts["cps_B"] = cps_b
+                ts["cps_VTL"] = safe_float(row.get("cps_VTL"), CPS_DECIMALS)
+                ts["cps_VTU"] = safe_float(row.get("cps_VTU"), CPS_DECIMALS)
+                cps_cls = row.get("cps_class")
+                if isinstance(cps_cls, str):
+                    ts["cps_class"] = cps_cls
+                size_km = safe_float(row.get("cps_size_km"), 1)
+                if size_km is not None:
+                    ts["cps_size_km"] = size_km
+                cps_dir = safe_float(row.get("cps_dir"), 1)
+                if cps_dir is not None:
+                    ts["cps_dir"] = cps_dir
+                raw_o = row.get("cps_original")
+                if raw_o is not None and not (isinstance(raw_o, float) and math.isnan(raw_o)):
+                    ts["cps_original"] = bool(raw_o)
+
             timesteps.append(ts)
 
         if year not in year_data:
@@ -336,6 +523,37 @@ def main():
         "months":   sorted({s["month"]          for s in summaries}),
         "regions":  sorted({s["genesis_region"] for s in summaries}),
         "quantile_thresholds": {k: round(v, 4) for k, v in thresholds.items()},
+        # Distribution of track-level max_vor42, used by the intensity filter
+        # to draw the PDF, the quantile guide lines and the range slider.
+        "intensity_pdf": intensity_pdf,
+        # Structural classes present in this build, with counts, so the type
+        # filter can render without scanning all tracks client-side.
+        "cps_classes": [
+            {
+                "code":  code,
+                "label": CPS_CLASS_LABELS.get(code, code),
+                "group": CPS_CLASS_GROUPS.get(code, "Undetermined"),
+                "count": count,
+            }
+            for code, count in sorted(
+                Counter(s.get("cps_class") for s in summaries if s.get("cps_class")).items(),
+                key=lambda kv: -kv[1],
+            )
+        ],
+        "cps_groups": [
+            {"group": g, "count": c}
+            for g, c in sorted(
+                Counter(s.get("cps_group") for s in summaries if s.get("cps_group")).items(),
+                key=lambda kv: -kv[1],
+            )
+        ],
+        "warm_seclusion_count": sum(1 for s in summaries if s.get("warm_seclusion")),
+        # Processing levels. See the PLACEHOLDER note in main(): raw-catalogue
+        # tracks are not ingested yet, so "raw" is currently always 0.
+        "processing_levels": {
+            "processed": sum(1 for s in summaries if s.get("processed")),
+            "raw":       sum(1 for s in summaries if not s.get("processed")),
+        },
         "tracks": summaries,
         # Provenance metadata
         "sources": {
@@ -354,6 +572,20 @@ def main():
             "lifecycle_phases": {
                 "doi":   "10.21105/joss.07363",
                 "label": "Cyclophaser — de Souza et al. (JOSS 2025)",
+            },
+            "cyclone_phase_space": {
+                # PLACEHOLDER — the CPS dataset is not published yet. Replace
+                # `doi` with the Zenodo DOI once the record is minted, and drop
+                # `pending` so the About page stops flagging it as unpublished.
+                "doi":     None,
+                "pending": True,
+                "label":   "Cyclone Phase Space classification (Hart 2003 framework) — "
+                           "computed by A. Rodriguez (IAG-USP), exported from the "
+                           "paper_energy_patterns project. Zenodo DOI pending.",
+            },
+            "wind100": {
+                "doi":   "10.5281/zenodo.19353037",
+                "label": "100 m wind statistics per cyclone (1979–2020)",
             },
         },
     }

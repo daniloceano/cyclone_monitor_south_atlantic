@@ -58,13 +58,18 @@ Merge strategy
 - When wind100 data are absent for a track, the wind100 columns are filled
   with NaN (pd.NA for object, np.nan for float).
 
-Column schema (66 columns per output file)
+Column schema (74 columns per output file)
 ------------------------------------------
-  From main data (32):
+  From main data (40):
     track_id, date, lon, lat, vor42, lec_original, region, period,
+    cps_original, cps_class, cps_B, cps_VTL, cps_VTU, cps_size_km,
+    cps_dir, cps_over_ocean,
     Az, Ae, Kz, Ke, Cz, Ca, Ck, Ce,
     BAz, BAe, BKz, BKe, BΦZ, BΦE, Gz, Ge,
     dAzdt, dAedt, dKzdt, dKedt, RGz, RGe, RKz, RKe
+
+  The cps_* block is present only when data/raw/cps_parameters_SAt.csv was
+  available at preprocessing time; without it the file has 66 columns.
 
   From wind100_max (17):
     w100max_{QD}_lon, w100max_{QD}_lat, w100max_{QD}_val, w100max_{QD}_dist
@@ -412,7 +417,7 @@ def generate_report(
     r.append(f"  Directory : data/processed/tracks_by_id/")
     r.append(f"  Structure : {{YYYY}}/{{MM:02d}}/{{track_id}}.parquet")
     r.append(f"  Format    : Parquet (pyarrow)")
-    r.append(f"  Columns   : 32 main + 17 wind100_max + 17 wind100_p99 = 66 total")
+    r.append(f"  Columns   : 40 main (32 without CPS) + 17 wind100_max + 17 wind100_p99")
     r.append("")
     r.append("=" * 70)
 

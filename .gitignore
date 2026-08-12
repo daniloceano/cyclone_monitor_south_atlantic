@@ -86,8 +86,13 @@ data/interim/*
 !data/interim/README.md
 
 # Per-cyclone Parquet files (regeneratable via merge_wind100.py)
-# Keep the merge report for provenance; ignore the binary Parquet tree
-data/processed/tracks_by_id/
+# Keep the merge report for provenance; ignore the binary Parquet tree.
+# NOTE: the directory contents are ignored with '/*' rather than the directory
+# itself with '/'. A directory-level ignore cannot be undone by a later
+# negation, so the previous 'data/processed/tracks_by_id/' rule silently
+# excluded merge_report.txt too, defeating the stated intent.
+data/processed/tracks_by_id/*
+!data/processed/tracks_by_id/merge_report.txt
 
 # Parquet files (anywhere)
 *.parquet

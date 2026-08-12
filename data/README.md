@@ -9,6 +9,9 @@ data/
 ├── raw/                                        ← Source data (gitignored)
 │   ├── tracks_SAt_source.csv                   ← Full LEC dataset from Zenodo (~180 MB)
 │   ├── tracks_SAt_filtered_with_energetics.csv ← Symlink to above (legacy name)
+│   ├── cps_parameters_SAt.csv                  ← Cyclone Phase Space, per timestep (25 MB)
+│   ├── cps_classification_SAt.csv              ← CPS class per cyclone (1.2 MB)
+│   ├── cps_consolidation_report.txt            ← Validation report for the two above
 │   └── wind100/                                ← 100 m wind statistics (482 MB, local)
 │       ├── 1979_wind100/
 │       │   ├── 19790001_wind100_max.csv
@@ -20,7 +23,7 @@ data/
 ├── interim/                                    ← Intermediate products (gitignored)
 │   └── README.md
 ├── processed/                                  ← Final data products
-│   ├── tracks_south_atlantic_consolidated.csv  ← Flat CSV: all tracks + LEC (~143 MB)
+│   ├── tracks_south_atlantic_consolidated.csv  ← Flat CSV: tracks + LEC + CPS (~330 MB)
 │   ├── tracks_south_atlantic_consolidated.txt  ← Validation report for above
 │   └── tracks_by_id/                           ← Per-cyclone enriched Parquet files
 │       ├── merge_report.txt                    ← Wind100 merge coverage report
@@ -57,9 +60,12 @@ data/
              ↓  scripts/data/preprocess_data.py
              │
 ┌─────────────────────────────────────────────────────────────────────┐
-│ data/processed/tracks_south_atlantic_consolidated.csv (~143 MB)     │
+│ data/processed/tracks_south_atlantic_consolidated.csv (~330 MB)     │
 │ • All columns standardised (renamed, geometry dropped)              │
 │ • LEC energetics interpolated from 3-hourly to 1-hourly            │
+│ • CPS merged and interpolated 3-h → 1-h  (Dataset 5, optional)     │
+│   40 columns: 32 base + cps_original, cps_class, cps_B, cps_VTL,   │
+│   cps_VTU, cps_size_km, cps_dir, cps_over_ocean                    │
 └─────────────────────────────────────────────────────────────────────┘
              │                              │
              ↓  scripts/preprocess_data.py  ↓  scripts/data/merge_wind100.py
@@ -67,8 +73,8 @@ data/
 ┌────────────────────────┐    ┌─────────────────────────────────────────┐
 │ site/public/data/      │    │ data/processed/tracks_by_id/            │
 │ ├── summary.json       │    │ └── {YYYY}/{MM:02d}/{track_id}.parquet  │
-│ └── details/{year}.json│    │ • Main data + wind100_max + wind100_p99 │
-│ (Web application)      │    │ • 66 columns per file                   │
+│ └── details/{year}.json│    │ • Main + CPS + wind100_max + wind100_p99 │
+│ (Web application)      │    │ • 74 columns per file                   │
 └────────────────────────┘    └─────────────────────────────────────────┘
 ```
 
@@ -81,18 +87,36 @@ python3 scripts/data/run_pipeline.py
 # Skip download (use existing source file)
 python3 scripts/data/run_pipeline.py --skip-download
 
-# Also merge wind100 data into per-track Parquet files
+# Also download AND merge wind100 into per-track Parquet files
 python3 scripts/data/run_pipeline.py --skip-download --wind100
 
+# wind100 acquisition on its own (idempotent: verifies MD5, skips if present)
+python3 scripts/data/download_wind100.py
+
 # Run wind100 merge only (requires consolidated CSV to exist)
-conda run -n data python scripts/data/merge_wind100.py
+python3 scripts/data/merge_wind100.py
 
 # Dry run: check coverage without writing output
-conda run -n data python scripts/data/merge_wind100.py --dry-run
+python3 scripts/data/merge_wind100.py --dry-run
 
 # Process a single year (for testing)
-conda run -n data python scripts/data/merge_wind100.py --year 1979 --limit 10
+python3 scripts/data/merge_wind100.py --year 1979 --limit 10
 ```
+
+### ⚠️ Environment requirement
+
+**pandas must be `>= 2.0, < 3`.** Under pandas 3.x the grouping column is no
+longer passed into `DataFrameGroupBy.apply`, which used to break
+`preprocess_data.py` with `KeyError: 'track_id'`. The interpolation code has
+since been rewritten to use `groupby().transform()` and is version-agnostic, but
+`environment.yml` pins the upper bound as a guard. Create the env with:
+
+```bash
+conda env create -f environment.yml && conda activate cyclone_monitor
+```
+
+Note that `conda run` does **not** forward stdin, so scripts piped via heredoc
+exit silently — always pass a file path.
 
 ---
 
@@ -169,6 +193,27 @@ four quadrants relative to the cyclone centre:
   SW | SE
 ```
 
+### Acquisition
+
+```bash
+python3 scripts/data/download_wind100.py
+```
+
+The Zenodo record holds a **single** file, `wind100.tar.gz`, which is a
+**tarball of tarballs** — this is not stated anywhere in the record itself:
+
+```
+wind100.tar.gz                        (182.3 MB, md5 4eaef49b4c53b5ef81cece06680fca31)
+  └── {YYYY}_wind100.tar.gz           (43 archives, 1979–2021)
+        └── {YYYY}_wind100/
+              ├── {track_id}_wind100_max.csv
+              └── {track_id}_wind100_p99.csv
+```
+
+Two extraction passes are needed. The download script does both, verifies the
+published MD5, validates the resulting tree (43 year directories, 15,974 CSVs)
+and is idempotent — re-running it re-validates rather than re-downloading.
+
 ### File Organisation
 
 ```
@@ -177,6 +222,15 @@ data/raw/wind100/
     {track_id}_wind100_max.csv   ← absolute maximum per quadrant
     {track_id}_wind100_p99.csv   ← 99th percentile per quadrant
 ```
+
+> **Correction to the column description below:** `{QD}_dis_*` is a plain
+> **Euclidean distance in degrees** (`hypot(Δlon, Δlat)`), *not* a great-circle
+> distance. Verified against 761 timesteps of known track positions: the error
+> against the Euclidean definition is 0.0000°, against great-circle 0.63°
+> (median). A practical consequence: because the metric is planar and all four
+> quadrants are always populated, the cyclone centre is recoverable **exactly**
+> from the quadrant geometry by least-squares trilateration — relevant for the
+> 1,198 tracks that exist only in this dataset and carry no centre position.
 
 | Parameter | Value |
 |-----------|-------|
@@ -243,16 +297,16 @@ The year and month directories come from the **first timestep** of each
 cyclone. A cyclone that starts in January 2005 and ends in February 2005 is
 filed under `2005/01/`.
 
-### Column Schema (66 columns)
+### Column Schema (74 columns, or 66 without CPS)
 
 Each Parquet file contains all timesteps for one cyclone with:
 
 | Block | Columns | Count |
 |-------|---------|-------|
-| Main data | track_id, date, lon, lat, vor42, lec_original, region, period, Az, Ae, Kz, Ke, Cz, Ca, Ck, Ce, BAz, BAe, BKz, BKe, BΦZ, BΦE, Gz, Ge, dAzdt, dAedt, dKzdt, dKedt, RGz, RGe, RKz, RKe | 32 |
+| Main data | track_id, date, lon, lat, vor42, lec_original, region, period, cps_original, cps_class, cps_B, cps_VTL, cps_VTU, cps_size_km, cps_dir, cps_over_ocean, Az, Ae, Kz, Ke, Cz, Ca, Ck, Ce, BAz, BAe, BKz, BKe, BΦZ, BΦE, Gz, Ge, dAzdt, dAedt, dKzdt, dKedt, RGz, RGe, RKz, RKe | 40 |
 | wind100_max | w100max_{NW,NE,SW,SE}_{lon,lat,val,dist} + w100max_global_quad | 17 |
 | wind100_p99 | w100p99_{NW,NE,SW,SE}_{lon,lat,val,dist} + w100p99_global_quad | 17 |
-| **Total** | | **66** |
+| **Total** | | **74** |
 
 Wind100 columns are NaN for timesteps where no wind100 record is available.
 
@@ -303,6 +357,7 @@ df["w100max_global_quad"]
 | Path | Status | Reason |
 |------|--------|--------|
 | `data/raw/*.csv` | **Gitignored** | Large source files (up to 180 MB) |
+| `data/raw/cps_*` | **Gitignored** | Covered by the blanket `data/raw/` rule — including the `.txt` report, so this README is the only versioned documentation of Dataset 5 |
 | `data/raw/wind100/` | **Gitignored** | 482 MB of CSV files |
 | `data/interim/` | **Gitignored** | Regeneratable intermediate products |
 | `data/processed/*.csv` | **Gitignored** | Large generated files |
@@ -311,6 +366,135 @@ df["w100max_global_quad"]
 | `data/interim/README.md` | **Versioned** | Documentation |
 | `data/README.md` | **Versioned** | This file |
 | `data/sedimentary_basins/` | **Versioned** | Brazilian offshore sedimentary basin shapefiles |
+
+---
+
+## 🌀 Dataset 5: Cyclone Phase Space (CPS) Classification
+
+**Source**: `paper_energy_patterns` project (`scripts/cps_analysis/`), exported by
+`scripts/cps_analysis/export_cps_for_monitor.py`
+**CPS computation**: Andres Rodriguez (IAG-USP)
+**Local files**: `data/raw/cps_parameters_SAt.csv`, `data/raw/cps_classification_SAt.csv` (gitignored)
+
+Thermal-structure classification of every cyclone in Dataset 1, using the Hart (2003)
+Cyclone Phase Space. Answers, per cyclone and per timestep, whether the system is
+extratropical, subtropical or tropical in structure.
+
+### File 1 — `cps_parameters_SAt.csv` (per timestep)
+
+- 212,996 rows · 6,776 cyclones · **3-hourly**
+- Joins onto Dataset 1 on (`track_id`, `date`); 100% of its keys are present there
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `track_id` | int64 | Cyclone identifier (YYYYNNNN) |
+| `date` | datetime | UTC timestamp, 3-hourly |
+| `B` | float64 | Storm-motion-relative 900–600 hPa thickness asymmetry (m). Large positive = frontal |
+| `VTL` | float64 | Lower thermal wind, 900–600 hPa. **Positive = warm core** |
+| `VTU` | float64 | Upper thermal wind, 600–300 hPa. **Positive = warm core** |
+| `SIZE` | float64 | Diagnosed system radius (km) |
+| `dir` | float64 | Storm motion direction (°) |
+| `lat`, `lon` | float64 | Position at that timestep (°) |
+| `over_ocean` | bool | Centre over ocean |
+| `cps_class` | string | Per-timestep label: `extratropical`, `subtropical`, `tropical`, `unclassified` |
+
+> **Native step is 3-hourly.** The exported file is left at 3-hourly on purpose: the CPS
+> series feed a threshold classification, so interpolated points would be labelled from
+> values nobody computed.
+>
+> **The monitor now interpolates them anyway, deliberately and reversibly.**
+> `scripts/data/preprocess_data.py` merges this file and interpolates to 1-hourly so the
+> phase-space panel is continuous alongside the energetics, under these rules:
+>
+> | Column | Treatment |
+> |---|---|
+> | `cps_B`, `cps_VTL`, `cps_VTU`, `cps_size_km` | linear, within track, `limit_area="inside"` |
+> | `cps_dir` | **circular** (unit-vector) interpolation — a linear mean of 350° and 10° would give 180° |
+> | `cps_over_ocean` | forward/backward fill within the track |
+> | `cps_class` | **not interpolated.** Original labels pass through verbatim; interpolated rows are labelled by re-applying the published thresholds to the interpolated parameters |
+>
+> `cps_original` marks which rows carry computed values (`True`) — the exact mirror of
+> `lec_original`. Re-deriving labels at original timesteps reproduces the upstream
+> classifier for **100 % of 188,573 rows**, which is the guard that keeps the two
+> consistent; the check runs on every pipeline execution and warns below 99 %.
+>
+> **Anything persistence-based — including the ≥ 36 h gate behind `phase_class` — must be
+> computed on `cps_original == True` rows only.** Interpolated points inflate run lengths.
+
+### File 2 — `cps_classification_SAt.csv` (per cyclone)
+
+One row for **all 6,789 cyclones**, including the 13 without CPS series (`has_cps = False`),
+so a join on `track_id` never silently drops them.
+
+| Column | Description |
+|--------|-------------|
+| `track_id`, `year`, `region`, `genesis_lat`, `genesis_lon`, `ep` | Identity; `ep` is the Energy Pattern where one exists |
+| `has_cps` | False for the 13 cyclones with no CPS series (one 2002, twelve 2009) |
+| `phase_class` | **The classification.** See the table below |
+| `phase_class_label` | Human-readable expansion of `phase_class` |
+| `genesis_state`, `genesis_onset_h`, `pure_genesis` | First persistent state and how long after genesis it began |
+| `state_sequence`, `transitions`, `n_persistent_states` | e.g. `EC->SC`, `ST` |
+| `dominant_class`, `dominance`, `frac_EC`/`frac_SC`/`frac_TC` | Share of the cyclone's own timesteps per structure |
+| `hours_EC`/`hours_SC`/`hours_TC` | Hours held in each persistent state |
+| `n_warm_seclusions`, `n_out_of_band`, `n_indeterminate_warm` | Runs rejected by the identification guards |
+| `antecedent_characteristics`, `antecedent_hours` | Structure shown before the first persistent state |
+
+| `phase_class` | n | % | Meaning |
+|---|---|---|---|
+| `EC` | 2,926 | 43.10% | extratropical throughout |
+| `SC` | 182 | 2.68% | subtropical throughout |
+| `TC` | 2 | 0.03% | tropical throughout — **unverified candidates, do not report as identified** |
+| `TT` / `ET` | 0 | 0.00% | tropical / extratropical transition — empty by construction |
+| `ST` | 60 | 0.88% | subtropical transition (EC → SC) |
+| `SD` | 22 | 0.32% | subtropical decay (SC → EC) |
+| `EC_like` | 2,398 | 35.32% | extratropical characteristics, never sustained 36 h |
+| `SC_like` | 548 | 8.07% | hybrid characteristics, never sustained 36 h |
+| `TC_like` | 2 | 0.03% | warm-core characteristics, never sustained 36 h |
+| `undetermined` | 636 | 9.37% | no structure held long enough, none dominant |
+| `no_cps_data` | 13 | 0.19% | no CPS series computed |
+
+### Classification protocol
+
+Thresholds after de Souza et al. (2026), taking extratropical/tropical from Wood et al.
+(2023) and subtropical from Gozzo et al. (2014):
+
+| Class | `B` [m] | `VTL` | `VTU` |
+|---|---|---|---|
+| extratropical | > 10 | < 0 | < 0 |
+| subtropical | −25 to 25 | > −50 | < −10 |
+| tropical | < 10 | > 0 | > 0 |
+
+A timestep satisfying more than one specification is resolved by precedence
+tropical > subtropical > extratropical. A class becomes a *state* of the cyclone only when
+held for **≥ 36 consecutive hours** (Guishard et al. 2009; Gozzo et al. 2014).
+
+Persistent runs are then guarded, because the phase space alone cannot separate a genuine
+warm core from a Shapiro–Keyser **warm seclusion**:
+
+- **subtropical runs** — genesis between 20°S and 40°S (Gozzo criterion 1), ≥ 50% of the
+  run over ocean, and the run beginning no more than 12 h after the cyclone's own intensity
+  peak. A diabatically built warm core re-energises the system, so the peak follows the
+  structure; a secluded warm core is the terminal stage and the peak has already passed.
+- **tropical runs** — equatorward of 40°S and over ocean.
+
+Of 804 persistent hybrid runs, 271 were accepted, 395 rejected as `genesis_out_of_band` and
+138 as `warm_seclusion`. The guarded rate is 6.3 subtropical cyclones per year against
+Gozzo et al.'s 7.2; without the guards it is 18.0.
+
+### Caveats
+
+- The two `TC` cyclones are **candidates, not identifications** — shallow warm cores, not
+  yet inspected case by case.
+- `TT` and `ET` are empty because this catalogue's genesis boxes exclude every documented
+  South Atlantic tropical system (Catarina, Anita, Arani, Deni, Guará, Iba), and the named
+  recent cases (Raoni, Yakecan, Akará, Biguá) postdate the record.
+- The subtropical count is threshold-sensitive by a factor of 6–8 across the threshold sets
+  tested; quote any subtropical number with its threshold set attached.
+- The 500 km CPS radius may not represent small, shallow SE-BR systems well.
+
+Full method, statistics and caveats: `scripts/cps_analysis/SCIENTIFIC_NOTES.md` in the
+`paper_energy_patterns` project. Regenerate these files with
+`python scripts/cps_analysis/export_cps_for_monitor.py` from that project.
 
 ---
 

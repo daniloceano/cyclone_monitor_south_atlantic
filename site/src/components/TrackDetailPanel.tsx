@@ -28,6 +28,7 @@ import dynamic from "next/dynamic";
 const LECTimeSeries = dynamic(() => import("./LECTimeSeries"), { ssr: false });
 const LECBoxDiagram = dynamic(() => import("./LECBoxDiagram"), { ssr: false });
 const VorticityTimeSeries = dynamic(() => import("./VorticityTimeSeries"), { ssr: false });
+const HartPhaseDiagram = dynamic(() => import("./HartPhaseDiagram"), { ssr: false });
 
 interface TrackDetailPanelProps {
   track: TrackSummary;
@@ -83,9 +84,13 @@ export default function TrackDetailPanel({
   const trackIdStr = String(track.id);
   const [showLECCharts, setShowLECCharts] = useState(false);
   const [lecTab, setLecTab] = useState<"timeseries" | "boxdiagram">("timeseries");
+  const [showCPS, setShowCPS] = useState(false);
 
   // Count timesteps that carry LEC data
   const lecCount = timesteps?.filter((t) => t.Kz !== undefined).length ?? 0;
+  // Count timesteps carrying phase-space parameters, and how many were computed
+  const cpsCount = timesteps?.filter((t) => t.cps_B !== undefined).length ?? 0;
+  const cpsOriginalCount = timesteps?.filter((t) => t.cps_original === true).length ?? 0;
 
   // Resolve wind100 entry for the selected timestep
   const w100Entry =
@@ -128,6 +133,26 @@ export default function TrackDetailPanel({
           />
           <InfoRow label="Duration" value={formatDuration(track.duration_h)} />
           <InfoRow label="Genesis month" value={monthName(track.month)} />
+          {track.cps_label && (
+            <InfoRow
+              label="Structure (CPS)"
+              value={track.cps_seq ? `${track.cps_label} · ${track.cps_seq}` : track.cps_label}
+              highlight
+            />
+          )}
+          {track.warm_seclusion && (
+            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1 leading-tight">
+              A persistent hybrid run in this cyclone was rejected as a
+              Shapiro–Keyser warm seclusion rather than counted as subtropical.
+            </p>
+          )}
+          {track.processed === false && (
+            <p className="text-[10px] text-gray-600 bg-gray-100 border border-gray-200 rounded px-1.5 py-1 leading-tight">
+              Track-only cyclone: position and vorticity from the tracking
+              catalogue, with no energetics, lifecycle phases or phase-space
+              diagnostics.
+            </p>
+          )}
         </div>
 
         {/* ── Intensity ─────────────────────────────────────────────────── */}
@@ -207,6 +232,47 @@ export default function TrackDetailPanel({
             wind100Metric={wind100Metric}
             onMetricChange={onWind100MetricChange}
           />
+        )}
+
+        {/* ── Cyclone Phase Space Section ────────────────────────────────── */}
+        {timesteps && cpsCount > 0 && (
+          <div className="bg-fuchsia-50 border border-fuchsia-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowCPS(!showCPS)}
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-fuchsia-100 transition"
+            >
+              <span className="text-xs font-semibold text-fuchsia-800">
+                🌀 Cyclone Phase Space
+              </span>
+              <span className="text-fuchsia-600 text-xs">
+                {showCPS ? "▲ Hide" : "▼ Show"}
+              </span>
+            </button>
+
+            {showCPS && (
+              <div className="px-3 pb-3 space-y-2">
+                <div className="bg-white rounded-lg p-2 border border-fuchsia-100">
+                  <HartPhaseDiagram
+                    timesteps={timesteps}
+                    selectedTimestep={selectedTimestep}
+                    onTimestepSelect={onTimestepSelect}
+                  />
+                </div>
+                <p className="text-[10px] text-fuchsia-700 leading-tight">
+                  {cpsCount} timesteps with phase-space parameters
+                  {cpsOriginalCount > 0 && (
+                    <>
+                      {" · "}
+                      <span className="font-medium">{cpsOriginalCount}</span> computed
+                      at the native 3-hourly step
+                    </>
+                  )}
+                  . Hart (2003) framework; thresholds after de Souza et al. (2026).
+                  See the About page for the classification protocol and its caveats.
+                </p>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ── LEC Charts Section ─────────────────────────────────────────── */}
@@ -654,6 +720,36 @@ function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
       <InfoRow label="Position" value={`${formatLat(ts.lat)}, ${formatLon(ts.lon)}`} />
       <InfoRow label="Phase" value={PHASE_LABELS[ts.phase] ?? ts.phase} highlight />
       <InfoRow label="vor42" value={formatVor42(ts.vor42)} />
+
+      {/* ── Cyclone Phase Space at this timestep ───────────────────────── */}
+      {ts.cps_B !== undefined && (
+        <div className="pt-1.5 border-t border-gray-200">
+          <p className="text-xs font-semibold text-fuchsia-700 mb-1.5">
+            🌀 Phase Space
+            <span className="font-normal text-gray-400 ml-1">
+              {ts.cps_original ? "(computed)" : "(interpolated)"}
+            </span>
+          </p>
+          {ts.cps_class && (
+            <InfoRow label="Structure" value={ts.cps_class} highlight />
+          )}
+          <InfoRow label="B — thickness asym." value={`${ts.cps_B.toFixed(1)} m`} />
+          <InfoRow
+            label="VTL — lower thermal wind"
+            value={ts.cps_VTL !== undefined ? ts.cps_VTL.toFixed(1) : "—"}
+          />
+          <InfoRow
+            label="VTU — upper thermal wind"
+            value={ts.cps_VTU !== undefined ? ts.cps_VTU.toFixed(1) : "—"}
+          />
+          {ts.cps_size_km !== undefined && (
+            <InfoRow label="Radius" value={`${ts.cps_size_km.toFixed(0)} km`} />
+          )}
+          {ts.cps_dir !== undefined && (
+            <InfoRow label="Motion direction" value={`${ts.cps_dir.toFixed(0)}°`} />
+          )}
+        </div>
+      )}
 
       {/* ── Wind100 data ──────────────────────────────────────────────── */}
       <div className="pt-1.5 border-t border-gray-200">

@@ -4,25 +4,46 @@ channels:
   - defaults
 dependencies:
   - python=3.11
-  - pandas>=2.0
+  # ── Core data processing ───────────────────────────────────────────────────
+  # pandas is pinned BELOW 3.0 on purpose: pandas 3 stopped passing the
+  # grouping column into DataFrameGroupBy.apply (the old include_groups=True
+  # default became False), which silently breaks any groupby-apply that reads
+  # the key column. The pipeline code has since been made version-agnostic,
+  # but the pin stays as a guard against further behavioural drift.
+  - pandas>=2.0,<3
   - numpy>=1.24
   - pyarrow>=14.0
-  # Web app JSON generation
-  # (no extra dependencies beyond pandas/numpy)
+  # ── Sedimentary basin processing ───────────────────────────────────────────
+  # Required by scripts/process_sedimentary_basins.py and
+  # scripts/compute_basin_intersections.py (were missing from this file).
+  - geopandas>=0.14
+  - shapely>=2.0
+  # ── Downloads ──────────────────────────────────────────────────────────────
+  # Optional: the download scripts prefer curl/wget and fall back to these.
+  - requests>=2.31
+  - tqdm>=4.66
 
 # ─── Notes ────────────────────────────────────────────────────────────────────
-# This environment supports:
-#   - scripts/data/preprocess_data.py  (pandas, numpy)
-#   - scripts/data/merge_wind100.py    (pandas, numpy, pyarrow)
-#   - scripts/preprocess_data.py       (pandas, numpy)
+# This environment supports every script in scripts/:
+#   - scripts/data/download_source_data.py    (stdlib + requests/tqdm fallback)
+#   - scripts/data/download_wind100.py        (stdlib + requests/tqdm fallback)
+#   - scripts/data/preprocess_data.py         (pandas, numpy)
+#   - scripts/data/merge_wind100.py           (pandas, numpy, pyarrow)
+#   - scripts/preprocess_data.py              (pandas, numpy)
+#   - scripts/generate_wind100_json.py        (pandas, numpy)
+#   - scripts/process_sedimentary_basins.py   (geopandas, shapely)
+#   - scripts/compute_basin_intersections.py  (shapely)
 #
-# Create: conda env create -f environment.yml
+# Create:   conda env create -f environment.yml
 # Activate: conda activate cyclone_monitor
 #
-# To run the wind100 merge pipeline:
+# Full pipeline:
 #   conda activate cyclone_monitor
-#   python scripts/data/run_pipeline.py --skip-download --wind100
+#   python scripts/data/run_pipeline.py --wind100
 #
-# Alternatively, use the existing 'data' conda environment which already
-# has pandas 2.2.2 and pyarrow 17.0.0 installed:
-#   conda run -n data python scripts/data/merge_wind100.py
+# Any environment satisfying the pins above works. On the IAG workstation the
+# 'paper_energy_patterns' env (pandas 2.3.3 + pyarrow 22) is a valid drop-in:
+#   conda run -n paper_energy_patterns --no-capture-output python scripts/data/run_pipeline.py
+#
+# Caveat: `conda run` does NOT forward stdin, so scripts fed via heredoc
+# (python - <<'PY') exit silently. Always pass a file path.

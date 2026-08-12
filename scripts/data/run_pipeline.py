@@ -51,6 +51,12 @@ PIPELINE_STEPS = [
         "skip_flag": None,
     },
     {
+        "name": "Download wind100 data",
+        "script": "download_wind100.py",
+        "description": "Download and unpack 100 m wind statistics from Zenodo",
+        "skip_flag": "skip_wind100",
+    },
+    {
         "name": "Merge wind100 data",
         "script": "merge_wind100.py",
         "description": "Merge 100 m wind statistics into per-cyclone Parquet files",

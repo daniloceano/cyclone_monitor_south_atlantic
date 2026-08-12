@@ -2,8 +2,8 @@
 Validation Report
 ======================================================================
 
-Output file: /Users/danilocoutodesouza/Documents/Programs_and_scripts/cyclone_monitor_south_atlantic/data/processed/tracks_south_atlantic_consolidated.csv
-Generated: 2026-04-01 14:20:46
+Output file: /p1-swell/danilocs/cyclone_monitor_south_atlantic/data/processed/tracks_south_atlantic_consolidated.csv
+Generated: 2026-08-12 21:00:34
 
 ──────────────────────────────────────────────────────────────────────
 Dataset Summary
@@ -50,6 +50,25 @@ LEC Energetics Coverage (after interpolation)
   Cz    : ███████████████████░  97.8%
 
 ──────────────────────────────────────────────────────────────────────
+Cyclone Phase Space (CPS)
+──────────────────────────────────────────────────────────────────────
+  Cyclones with computed CPS : 6,761 of 6,789
+  Timesteps computed (3-h)   :  29.9%
+  Timesteps after interp.    :  87.3%
+
+  Per-timestep class distribution (after interpolation):
+    extratropical     :  347,441 rows ( 55.1%)
+    unclassified      :  145,715 rows ( 23.1%)
+    subtropical       :  128,399 rows ( 20.3%)
+    tropical          :    9,454 rows (  1.5%)
+
+  Labels at original timesteps are carried through verbatim;
+  interpolated rows are labelled by applying the published
+  thresholds to the interpolated parameters. Use 'cps_original'
+  to restrict to computed values — persistence-based statistics
+  (the >= 36 h gate) MUST use original rows only.
+
+──────────────────────────────────────────────────────────────────────
 Column List
 ──────────────────────────────────────────────────────────────────────
    1. track_id                       int64           (  0.0% null)
@@ -60,29 +79,37 @@ Column List
    6. lec_original                   bool            (  0.0% null)
    7. region                         object          (  0.0% null)
    8. period                         object          (  7.9% null)
-   9. Az                             float64         (  2.2% null)
-  10. Ae                             float64         (  2.2% null)
-  11. Kz                             float64         (  2.2% null)
-  12. Ke                             float64         (  2.2% null)
-  13. Cz                             float64         (  2.2% null)
-  14. Ca                             float64         (  2.2% null)
-  15. Ck                             float64         (  2.2% null)
-  16. Ce                             float64         (  2.2% null)
-  17. BAz                            float64         (  2.2% null)
-  18. BAe                            float64         (  2.2% null)
-  19. BKz                            float64         (  2.2% null)
-  20. BKe                            float64         (  2.2% null)
-  21. BΦZ                            float64         (  2.2% null)
-  22. BΦE                            float64         (  2.2% null)
-  23. Gz                             float64         (  2.2% null)
-  24. Ge                             float64         (  2.2% null)
-  25. dAzdt                          float64         (  2.2% null)
-  26. dAedt                          float64         (  2.2% null)
-  27. dKzdt                          float64         (  2.2% null)
-  28. dKedt                          float64         (  2.2% null)
-  29. RGz                            float64         (  2.2% null)
-  30. RGe                            float64         (  2.2% null)
-  31. RKz                            float64         (  2.2% null)
-  32. RKe                            float64         (  2.2% null)
+   9. cps_original                   bool            (  0.0% null)
+  10. cps_class                      object          (  0.0% null)
+  11. cps_B                          float64         ( 12.7% null)
+  12. cps_VTL                        float64         ( 12.7% null)
+  13. cps_VTU                        float64         ( 12.7% null)
+  14. cps_size_km                    float64         (  1.1% null)
+  15. cps_dir                        float64         (  1.1% null)
+  16. cps_over_ocean                 object          (  0.1% null)
+  17. Az                             float64         (  2.2% null)
+  18. Ae                             float64         (  2.2% null)
+  19. Kz                             float64         (  2.2% null)
+  20. Ke                             float64         (  2.2% null)
+  21. Cz                             float64         (  2.2% null)
+  22. Ca                             float64         (  2.2% null)
+  23. Ck                             float64         (  2.2% null)
+  24. Ce                             float64         (  2.2% null)
+  25. BAz                            float64         (  2.2% null)
+  26. BAe                            float64         (  2.2% null)
+  27. BKz                            float64         (  2.2% null)
+  28. BKe                            float64         (  2.2% null)
+  29. BΦZ                            float64         (  2.2% null)
+  30. BΦE                            float64         (  2.2% null)
+  31. Gz                             float64         (  2.2% null)
+  32. Ge                             float64         (  2.2% null)
+  33. dAzdt                          float64         (  2.2% null)
+  34. dAedt                          float64         (  2.2% null)
+  35. dKzdt                          float64         (  2.2% null)
+  36. dKedt                          float64         (  2.2% null)
+  37. RGz                            float64         (  2.2% null)
+  38. RGe                            float64         (  2.2% null)
+  39. RKz                            float64         (  2.2% null)
+  40. RKe                            float64         (  2.2% null)
 
 ======================================================================

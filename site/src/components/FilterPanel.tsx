@@ -1,17 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  FilterState, 
-  SummaryData, 
-  MONTH_NAMES, 
+import {
+  FilterState,
+  SummaryData,
+  MONTH_NAMES,
   BasinFilterState,
   BasinCollection,
   BasinIntersections,
   BasinFilterMode,
   EMPTY_BASIN_FILTER,
+  EMPTY_FILTERS,
+  ProcessingFilter,
+  CPS_GROUP_COLORS,
 } from "@/types/cyclone";
-import { toggleValue, getBasinFilterModeLabel } from "@/lib/filters";
+import { toggleValue, getBasinFilterModeLabel, hasActiveFilters } from "@/lib/filters";
+import IntensityFilter from "./IntensityFilter";
 
 interface FilterPanelProps {
   summaryData: SummaryData;
@@ -35,20 +39,37 @@ export default function FilterPanel({
   basinFilter,
   onBasinFilterChange,
 }: FilterPanelProps) {
-  const [expanded, setExpanded] = useState<"year" | "month" | "region" | "basin" | null>("year");
+  type SectionKey =
+    | "year" | "month" | "region" | "basin"
+    | "intensity" | "type" | "processing";
+  const [expanded, setExpanded] = useState<SectionKey | null>("year");
 
-  const hasFilters =
-    filters.years.length > 0 ||
-    filters.months.length > 0 ||
-    filters.regions.length > 0;
-  
+  const hasFilters = hasActiveFilters(filters);
+
   const hasBasinFilter = basinFilter.selectedBasins.length > 0;
   const hasAnyFilter = hasFilters || hasBasinFilter;
 
   function clearAll() {
-    onFiltersChange({ years: [], months: [], regions: [] });
+    onFiltersChange(EMPTY_FILTERS);
     onBasinFilterChange(EMPTY_BASIN_FILTER);
   }
+
+  function toggleCpsGroup(g: string) {
+    onFiltersChange({ ...filters, cpsGroups: toggleValue(filters.cpsGroups, g) });
+  }
+  function toggleCpsClass(c: string) {
+    onFiltersChange({ ...filters, cpsClasses: toggleValue(filters.cpsClasses, c) });
+  }
+  function setProcessing(p: ProcessingFilter) {
+    onFiltersChange({ ...filters, processing: p });
+  }
+
+  const typeBadge =
+    filters.cpsGroups.length +
+    filters.cpsClasses.length +
+    (filters.warmSeclusionOnly ? 1 : 0);
+  const intensityActive =
+    filters.intensity.min !== null || filters.intensity.max !== null;
 
   function toggleYear(y: number) {
     onFiltersChange({ ...filters, years: toggleValue(filters.years, y) });
@@ -190,6 +211,180 @@ export default function FilterPanel({
         </div>
       </FilterSection>
 
+      {/* Intensity filter */}
+      {summaryData.intensity_pdf && (
+        <FilterSection
+          title="Intensity (vor42)"
+          active={intensityActive}
+          expanded={expanded === "intensity"}
+          onToggle={() => setExpanded(expanded === "intensity" ? null : "intensity")}
+          badgeCount={intensityActive ? 1 : 0}
+          maxHeightClass="max-h-none"
+        >
+          <IntensityFilter
+            pdf={summaryData.intensity_pdf}
+            value={filters.intensity}
+            onChange={(intensity) => onFiltersChange({ ...filters, intensity })}
+            matchCount={filteredCount}
+          />
+        </FilterSection>
+      )}
+
+      {/* Cyclone type (CPS) filter */}
+      {summaryData.cps_groups && summaryData.cps_groups.length > 0 && (
+        <FilterSection
+          title="Cyclone Type (CPS)"
+          active={typeBadge > 0}
+          expanded={expanded === "type"}
+          onToggle={() => setExpanded(expanded === "type" ? null : "type")}
+          badgeCount={typeBadge}
+          maxHeightClass="max-h-72"
+        >
+          <div className="space-y-2">
+            <p className="text-[10px] text-gray-400 leading-tight">
+              Thermal structure from the Cyclone Phase Space. A class is only
+              assigned when it persists ≥ 36 h.
+            </p>
+
+            {/* Coarse groups */}
+            <div className="flex flex-col gap-1">
+              {summaryData.cps_groups.map(({ group, count }) => {
+                const on = filters.cpsGroups.includes(group);
+                return (
+                  <button
+                    key={group}
+                    onClick={() => toggleCpsGroup(group)}
+                    className={`text-xs text-left px-2 py-1 rounded transition flex items-center justify-between ${
+                      on ? "text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                    style={on ? { background: CPS_GROUP_COLORS[group] ?? "#2563eb" } : undefined}
+                  >
+                    <span className="flex items-center gap-1.5 truncate">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: CPS_GROUP_COLORS[group] ?? "#9ca3af" }}
+                      />
+                      {group}
+                    </span>
+                    <span className={`text-[10px] ${on ? "text-white/70" : "text-gray-400"}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Exact phase_class codes */}
+            {summaryData.cps_classes && summaryData.cps_classes.length > 0 && (
+              <details className="mt-1">
+                <summary className="text-[10px] text-gray-500 cursor-pointer hover:text-gray-700">
+                  Exact class codes
+                </summary>
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {summaryData.cps_classes.map(({ code, label, count }) => {
+                    const on = filters.cpsClasses.includes(code);
+                    return (
+                      <button
+                        key={code}
+                        onClick={() => toggleCpsClass(code)}
+                        title={`${label} — ${count} cyclones`}
+                        className={`text-[10px] px-1.5 py-0.5 rounded transition ${
+                          on
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        }`}
+                      >
+                        {code} <span className="opacity-60">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </details>
+            )}
+
+            {/* Warm seclusion */}
+            {(summaryData.warm_seclusion_count ?? 0) > 0 && (
+              <label className="flex items-start gap-1.5 mt-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.warmSeclusionOnly}
+                  onChange={(e) =>
+                    onFiltersChange({ ...filters, warmSeclusionOnly: e.target.checked })
+                  }
+                  className="mt-0.5"
+                />
+                <span className="text-[11px] text-gray-600 leading-tight">
+                  Warm seclusion only{" "}
+                  <span className="text-gray-400">
+                    ({summaryData.warm_seclusion_count})
+                  </span>
+                  <span className="block text-[9px] text-gray-400">
+                    Systems with a persistent run rejected as a Shapiro–Keyser
+                    warm seclusion rather than a genuine hybrid core.
+                  </span>
+                </span>
+              </label>
+            )}
+          </div>
+        </FilterSection>
+      )}
+
+      {/* Processing level filter */}
+      {summaryData.processing_levels && (
+        <FilterSection
+          title="Processing Level"
+          active={filters.processing !== "all"}
+          expanded={expanded === "processing"}
+          onToggle={() => setExpanded(expanded === "processing" ? null : "processing")}
+          badgeCount={filters.processing !== "all" ? 1 : 0}
+        >
+          <div className="space-y-1.5">
+            {([
+              ["all", "All cyclones", null],
+              ["processed", "Processed", summaryData.processing_levels.processed],
+              ["raw", "Track only", summaryData.processing_levels.raw],
+            ] as [ProcessingFilter, string, number | null][]).map(([key, label, count]) => (
+              <button
+                key={key}
+                onClick={() => setProcessing(key)}
+                disabled={count === 0}
+                className={`w-full text-xs text-left px-2 py-1 rounded transition flex items-center justify-between ${
+                  filters.processing === key
+                    ? "bg-blue-600 text-white"
+                    : count === 0
+                    ? "bg-gray-50 text-gray-300 cursor-not-allowed"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                <span>{label}</span>
+                {count !== null && (
+                  <span
+                    className={`text-[10px] ${
+                      filters.processing === key ? "text-white/70" : "text-gray-400"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            ))}
+            <p className="text-[10px] text-gray-400 leading-tight pt-1">
+              <span className="font-medium text-gray-500">Processed</span> cyclones
+              carry LEC energetics, lifecycle phases and a genesis region.{" "}
+              <span className="font-medium text-gray-500">Track only</span> cyclones
+              come from the raw tracking catalogue with position and vorticity
+              alone.
+              {summaryData.processing_levels.raw === 0 && (
+                <span className="block mt-1 text-amber-600">
+                  The raw catalogue is not ingested yet, so every cyclone here is
+                  fully processed.
+                </span>
+              )}
+            </p>
+          </div>
+        </FilterSection>
+      )}
+
       {/* Basin filter */}
       {basinCollection && (
         <FilterSection
@@ -289,6 +484,9 @@ interface FilterSectionProps {
   expanded: boolean;
   onToggle: () => void;
   badgeCount: number;
+  /** Tailwind max-height for the expanded body. Sections whose content is taller
+   *  than the default (charts, long lists) override it so nothing is clipped. */
+  maxHeightClass?: string;
   children: React.ReactNode;
 }
 
@@ -298,6 +496,7 @@ function FilterSection({
   expanded,
   onToggle,
   badgeCount,
+  maxHeightClass = "max-h-40",
   children,
 }: FilterSectionProps) {
   return (
@@ -326,7 +525,7 @@ function FilterSection({
       </button>
 
       {expanded && (
-        <div className="px-3 pb-2.5 custom-scrollbar max-h-40 overflow-y-auto">
+        <div className={`px-3 pb-2.5 custom-scrollbar ${maxHeightClass} overflow-y-auto`}>
           {children}
         </div>
       )}

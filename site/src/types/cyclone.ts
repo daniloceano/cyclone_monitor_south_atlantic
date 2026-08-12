@@ -32,8 +32,58 @@ export interface TrackSummary {
   max_vor42: number;
   /** Intensity quantile label relative to all tracks in the dataset. */
   quantile: "top 5%" | "top 10%" | "top 25%" | "top 50%" | "bottom 50%";
+  /**
+   * True when the cyclone carries the full diagnostic stack (LEC energetics +
+   * lifecycle phases + genesis region). False for "raw" tracks that exist in the
+   * tracking catalogue but were never processed.
+   *
+   * NOTE: raw-catalogue tracks are not ingested yet, so every track currently
+   * reports true. The filter is in place so they light up when merged in.
+   */
+  processed: boolean;
+  /** CPS phase_class code (EC, SC, ST, SD, EC_like, …). Absent without CPS. */
+  cps_class?: string;
+  /** Human-readable expansion of cps_class. */
+  cps_label?: string;
+  /** Coarse group used by the type filter (Extratropical, Subtropical, …). */
+  cps_group?: string;
+  /** Persistent-state sequence, e.g. "EC->SC". */
+  cps_seq?: string;
+  /**
+   * True when the CPS identification guards rejected at least one persistent
+   * run as a Shapiro–Keyser warm seclusion. Not a class — a property of the
+   * rejected runs, surfaced because it is scientifically interesting.
+   */
+  warm_seclusion?: boolean;
   /** Simplified track coordinates as [lon, lat] pairs (GeoJSON convention). */
   coords: [number, number][];
+}
+
+/**
+ * Distribution of track-level max_vor42 across the whole dataset.
+ * Drives the intensity filter: the PDF curve, the quantile guide lines and the
+ * bounds of the range slider.
+ */
+export interface IntensityPDF {
+  /** Histogram bin edges — length is density.length + 1. */
+  bin_edges: number[];
+  /** Raw counts per bin. */
+  counts: number[];
+  /** Probability density per bin (integrates to 1 over the value axis). */
+  density: number[];
+  min: number;
+  max: number;
+  /** Number of tracks contributing to the histogram. */
+  n: number;
+  quantiles: QuantileThresholds;
+}
+
+/** One structural class present in the dataset, with its track count. */
+export interface CpsClassInfo {
+  code: string;
+  label: string;
+  group: string;
+  count: number;
 }
 
 /** Quantile thresholds for max_vor42 across all tracks (global, dataset-level).
@@ -64,6 +114,16 @@ export interface SummaryData {
   /** Sorted list of all genesis region names. */
   regions: string[];
   quantile_thresholds: QuantileThresholds;
+  /** Distribution of max_vor42 — drives the intensity filter. */
+  intensity_pdf?: IntensityPDF;
+  /** Structural classes present, with counts (empty when CPS is absent). */
+  cps_classes?: CpsClassInfo[];
+  /** Coarse structural groups present, with counts. */
+  cps_groups?: { group: string; count: number }[];
+  /** How many cyclones had a run rejected as a warm seclusion. */
+  warm_seclusion_count?: number;
+  /** Track counts by processing level. */
+  processing_levels?: { processed: number; raw: number };
   tracks: TrackSummary[];
 }
 
@@ -132,6 +192,31 @@ export interface Timestep {
    * `new Date(date).getUTCHours() % 3 === 0` as an approximation.
    */
   lec_original?: boolean;
+
+  // ── Cyclone Phase Space (Hart 2003 framework) ───────────────────────────────
+  // Source is 3-hourly, interpolated to 1-hourly in preprocessing exactly like
+  // the LEC terms. Present only where the phase-space parameters exist.
+  /** Storm-motion-relative 900–600 hPa thickness asymmetry (m).
+   *  Large positive = frontal structure; near zero = symmetric. */
+  cps_B?: number;
+  /** Lower-tropospheric thermal wind, 900–600 hPa. Positive = warm core. */
+  cps_VTL?: number;
+  /** Upper-tropospheric thermal wind, 600–300 hPa. Positive = warm core. */
+  cps_VTU?: number;
+  /** Per-timestep structural label. */
+  cps_class?: "extratropical" | "subtropical" | "tropical" | "unclassified";
+  /** Diagnosed system radius (km). */
+  cps_size_km?: number;
+  /** Storm motion direction (degrees, 0–360). Interpolated on the circle. */
+  cps_dir?: number;
+  /**
+   * True  = CPS parameters were computed at this timestep (original 3-hourly).
+   * False = linearly interpolated from adjacent 3-hourly values.
+   *
+   * Anything persistence-based (the >= 36 h gate behind the per-cyclone
+   * classification) must be computed on original timesteps only.
+   */
+  cps_original?: boolean;
 }
 
 /** Detail object per track inside a year detail file. */
@@ -148,6 +233,21 @@ export interface YearDetails {
 
 // ─── UI state types ───────────────────────────────────────────────────────────
 
+/** Processing level filter. "all" applies no constraint. */
+export type ProcessingFilter = "all" | "processed" | "raw";
+
+/**
+ * Intensity (max_vor42) selection.
+ * - mode "range": keep tracks with min <= max_vor42 <= max
+ * - mode "cutoff": keep tracks with max_vor42 >= min (max is ignored)
+ * `null` bounds mean "unbounded on that side".
+ */
+export interface IntensityFilterState {
+  mode: "range" | "cutoff";
+  min: number | null;
+  max: number | null;
+}
+
 export interface FilterState {
   /** Empty array means "all years". */
   years: number[];
@@ -155,12 +255,55 @@ export interface FilterState {
   months: number[];
   /** Empty array means "all regions". */
   regions: string[];
+  /** Empty array means "all structural groups" (Extratropical, Subtropical, …). */
+  cpsGroups: string[];
+  /** Empty array means "all phase_class codes". Applied on top of cpsGroups. */
+  cpsClasses: string[];
+  /** When true, keep only cyclones flagged with a rejected warm-seclusion run. */
+  warmSeclusionOnly: boolean;
+  /** Processing level constraint. */
+  processing: ProcessingFilter;
+  /** Intensity constraint on max_vor42. */
+  intensity: IntensityFilterState;
 }
+
+export const EMPTY_INTENSITY: IntensityFilterState = {
+  mode: "range",
+  min: null,
+  max: null,
+};
 
 export const EMPTY_FILTERS: FilterState = {
   years: [],
   months: [],
   regions: [],
+  cpsGroups: [],
+  cpsClasses: [],
+  warmSeclusionOnly: false,
+  processing: "all",
+  intensity: EMPTY_INTENSITY,
+};
+
+/**
+ * Colour per structural group, used by the type filter chips and the phase
+ * diagram. Kept distinct from PHASE_COLORS (lifecycle) on purpose — the two
+ * classifications are orthogonal and must not read as the same scale.
+ */
+export const CPS_GROUP_COLORS: Record<string, string> = {
+  Extratropical: "#2563eb",
+  Subtropical:   "#c026d3",
+  Tropical:      "#dc2626",
+  Transition:    "#ea580c",
+  Undetermined:  "#9ca3af",
+  "No CPS data": "#d1d5db",
+};
+
+/** Colour per per-timestep CPS class, for the Hart diagram trajectory. */
+export const CPS_CLASS_COLORS: Record<string, string> = {
+  extratropical: "#2563eb",
+  subtropical:   "#c026d3",
+  tropical:      "#dc2626",
+  unclassified:  "#cbd5e1",
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────

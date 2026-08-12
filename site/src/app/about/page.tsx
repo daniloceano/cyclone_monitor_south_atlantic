@@ -117,13 +117,128 @@ export default function AboutPage() {
                 doiUrl="https://doi.org/10.21105/joss.07363"
                 role="Phase labels per timestep"
               />
+
+              <DataSourceCard
+                title="100 m Wind Statistics (wind100)"
+                description="Maximum and 99th-percentile 100 m wind speed associated with each cyclone, derived from ERA5 in a Lagrangian (cyclone-centred) reference frame and reported separately for the four quadrants around the centre."
+                citation="Gramcianinov, C. B., & Couto de Souza, D. (2026). Maximum wind speeds and 99th percentile values at 100 meters associated with extratropical cyclones in the South Atlantic (1979–2020). Zenodo."
+                doi="10.5281/zenodo.19353037"
+                doiUrl="https://doi.org/10.5281/zenodo.19353037"
+                role="Quadrant wind extrema shown on the map and in the timestep panel; also drives the sedimentary-basin wind filter"
+              />
+
+              <DataSourceCard
+                title="Cyclone Phase Space Classification"
+                description="Thermal-structure diagnostics for every cyclone in the catalogue, following the Hart (2003) Cyclone Phase Space: the thickness asymmetry B and the lower/upper thermal winds VTL and VTU, plus a per-timestep and a per-cyclone structural classification."
+                citation="Rodriguez, A., & Couto de Souza, D. (in preparation). Cyclone Phase Space classification of Southwestern Atlantic cyclones (1979–2020). Computed within the paper_energy_patterns project, IAG-USP."
+                pending
+                pendingNote="The dataset is being prepared for deposit on Zenodo. Until then it is copied into data/raw/ by hand and is not reproducible from a public download — see the placeholder note in scripts/data/preprocess_data.py."
+                role="Cyclone type filter, the phase-space diagram in the track panel, and the per-timestep structural label"
+              />
+            </div>
+          </section>
+
+          {/* Data Coverage */}
+          <section>
+            <h2 className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-4">
+              Data Coverage
+            </h2>
+            <p className="text-gray-600 text-sm mb-4 leading-relaxed">
+              Not every diagnostic covers every cyclone, and not every diagnostic
+              shares the same temporal resolution. This table is the honest
+              summary of what exists behind each panel of the interface.
+            </p>
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left font-medium text-gray-600 px-4 py-2">Layer</th>
+                      <th className="text-left font-medium text-gray-600 px-4 py-2">Cyclones</th>
+                      <th className="text-left font-medium text-gray-600 px-4 py-2">Native step</th>
+                      <th className="text-left font-medium text-gray-600 px-4 py-2">In this build</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-gray-700">
+                    <tr>
+                      <td className="px-4 py-2">Track position &amp; vor42</td>
+                      <td className="px-4 py-2">6,789 (100 %)</td>
+                      <td className="px-4 py-2">1-hourly</td>
+                      <td className="px-4 py-2">as published</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2">Lifecycle phases</td>
+                      <td className="px-4 py-2">6,789 (100 %)</td>
+                      <td className="px-4 py-2">1-hourly</td>
+                      <td className="px-4 py-2">~7.9 % of timesteps unlabelled at track edges</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2">LEC energetics</td>
+                      <td className="px-4 py-2">6,789 (100 %)</td>
+                      <td className="px-4 py-2">3-hourly</td>
+                      <td className="px-4 py-2">interpolated to 1-hourly, 97.8 % coverage</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2">Cyclone Phase Space</td>
+                      <td className="px-4 py-2">6,761 (99.6 %)</td>
+                      <td className="px-4 py-2">3-hourly</td>
+                      <td className="px-4 py-2">interpolated to 1-hourly, 87.3 % coverage</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2">100 m wind (quadrants)</td>
+                      <td className="px-4 py-2">6,789 (100 %)</td>
+                      <td className="px-4 py-2">1-hourly</td>
+                      <td className="px-4 py-2">as published, no interpolation</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm">
+              <p className="font-medium text-amber-900 mb-1">
+                Why exactly 6,789 cyclones?
+              </p>
+              <p className="text-amber-800 leading-relaxed">
+                Because the LEC computation <em>is</em> the filter that produced this
+                catalogue — the source file is literally named{" "}
+                <code className="bg-amber-100 px-1 rounded text-xs">
+                  tracks_SAt_filtered_with_energetics
+                </code>
+                . The phase-space classification was then computed over that same
+                filtered set, which is why it never exceeds it. The 100 m wind
+                dataset, computed over a broader tracking catalogue, contains{" "}
+                <strong>1,198 additional cyclones</strong> that are not shown here:
+                they have no position, vorticity, phase or energetics in this build,
+                so they cannot be rendered as tracks.
+              </p>
+            </div>
+
+            <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm">
+              <p className="font-medium text-gray-800 mb-1">
+                Processing levels — and what is still missing
+              </p>
+              <p className="text-gray-600 leading-relaxed">
+                The interface distinguishes <strong>processed</strong> cyclones
+                (full diagnostic stack: energetics, phases, genesis region) from{" "}
+                <strong>track-only</strong> cyclones taken from the raw tracking
+                catalogue. In the current build every cyclone is processed and the
+                track-only count is zero: the full unfiltered catalogue
+                (Gramcianinov et al., Mendeley{" "}
+                <code className="bg-gray-100 px-1 rounded text-xs">10.17632/kwcvfr52hp.4</code>
+                ) has <strong>not been ingested yet</strong>. The filter and the
+                data model are already in place, so those tracks appear as soon as
+                the catalogue is merged in. Note also that the published Mendeley
+                version covers ERA5 only through <strong>2019</strong>, while this
+                catalogue runs to January 2021 — the two do not span the same period.
+              </p>
             </div>
           </section>
 
           {/* Preprocessing */}
           <section>
             <h2 className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-4">
-              Data Preprocessing
+              Processing Pipeline
             </h2>
             <div className="bg-white border border-gray-200 rounded-lg p-5 space-y-4">
               <div>
@@ -327,6 +442,109 @@ export default function AboutPage() {
                   </>
                 }
               />
+
+              <MethodCard
+                title="Cyclone Phase Space (thermal structure)"
+                content={
+                  <>
+                    <p className="mb-3">
+                      Every cyclone is also placed in the{" "}
+                      <strong>Cyclone Phase Space</strong> of Hart (2003), which
+                      describes a system by three numbers rather than by a name:
+                    </p>
+                    <ul className="list-disc list-inside space-y-1 mb-3">
+                      <li>
+                        <strong>B</strong> — storm-motion-relative 900–600 hPa
+                        thickness asymmetry (m). Large positive = frontal.
+                      </li>
+                      <li>
+                        <strong>V<sub>T</sub><sup>L</sup></strong> — lower-tropospheric
+                        thermal wind (900–600 hPa). Positive = warm core.
+                      </li>
+                      <li>
+                        <strong>V<sub>T</sub><sup>U</sup></strong> — upper-tropospheric
+                        thermal wind (600–300 hPa). Positive = warm core.
+                      </li>
+                    </ul>
+                    <div className="bg-gray-50 border border-gray-200 rounded p-3 text-sm mb-3">
+                      <p className="font-medium mb-2">
+                        Thresholds — de Souza et al. (2026), taking
+                        extratropical/tropical from Wood et al. (2023) and
+                        subtropical from Gozzo et al. (2014):
+                      </p>
+                      <ul className="space-y-1 font-mono text-xs">
+                        <li>extratropical &nbsp; B &gt; 10, VTL &lt; 0, VTU &lt; 0</li>
+                        <li>subtropical &nbsp;&nbsp;&nbsp; −25 &lt; B &lt; 25, VTL &gt; −50, VTU &lt; −10</li>
+                        <li>tropical &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; B &lt; 10, VTL &gt; 0, VTU &gt; 0</li>
+                      </ul>
+                      <p className="mt-2 text-gray-600">
+                        A timestep matching more than one specification is resolved
+                        by the precedence tropical &gt; subtropical &gt; extratropical.
+                      </p>
+                    </div>
+                    <p className="mb-3">
+                      A class only becomes a <em>state</em> of the cyclone when it is
+                      held for <strong>≥ 36 consecutive hours</strong> (Guishard et al.
+                      2009; Gozzo et al. 2014). Persistent runs are then guarded,
+                      because the phase space alone cannot separate a genuine
+                      diabatic warm core from a Shapiro–Keyser{" "}
+                      <strong>warm seclusion</strong>: subtropical runs must begin
+                      between 20°S and 40°S, spend at least half their time over
+                      ocean, and start no more than 12 h after the cyclone&apos;s own
+                      intensity peak. Of 804 persistent hybrid runs, 271 survived
+                      these guards; 395 were rejected for out-of-band genesis and
+                      138 as warm seclusions. The interface exposes the rejected
+                      warm-seclusion systems as their own filter.
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      Two caveats worth carrying: the subtropical count is
+                      threshold-sensitive by a factor of 6–8 across the threshold
+                      sets tested, so any subtropical number should be quoted with
+                      its threshold set attached; and the two cyclones classified{" "}
+                      <code className="bg-gray-100 px-1 rounded text-xs">TC</code> are{" "}
+                      <strong>unverified candidates</strong>, not identifications.
+                    </p>
+                  </>
+                }
+              />
+
+              <MethodCard
+                title="Interpolation of 3-hourly diagnostics"
+                content={
+                  <>
+                    <p className="mb-3">
+                      Both the LEC energetics and the phase-space parameters are
+                      computed at <strong>3-hourly</strong> intervals while the
+                      tracks are 1-hourly. Both are linearly interpolated to
+                      1-hourly within each track, never across track boundaries and
+                      never extrapolated beyond the first or last computed value.
+                      Each carries a provenance flag —{" "}
+                      <code className="bg-gray-100 px-1 rounded text-xs">lec_original</code>{" "}
+                      and{" "}
+                      <code className="bg-gray-100 px-1 rounded text-xs">cps_original</code>{" "}
+                      — so a computed value is always distinguishable from an
+                      interpolated one, in the interface and in the underlying files.
+                    </p>
+                    <p className="mb-3">
+                      The phase-space parameters need extra care because they feed a
+                      threshold classification. Structural labels at{" "}
+                      <strong>original</strong> timesteps are carried through
+                      verbatim from the upstream classifier; only interpolated
+                      timesteps are labelled here, by applying the thresholds above
+                      to the interpolated parameters. Re-deriving the labels at
+                      original timesteps reproduces the upstream classifier for{" "}
+                      <strong>100 % of 188,573 rows</strong>, which is the check that
+                      keeps the two consistent.
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      Anything persistence-based — including the ≥ 36 h gate behind
+                      the per-cyclone classification — is computed on the original
+                      3-hourly values only. Interpolated points inflate run lengths
+                      and must never be fed to that test.
+                    </p>
+                  </>
+                }
+              />
             </div>
           </section>
 
@@ -361,6 +579,47 @@ export default function AboutPage() {
                 <li className="flex gap-2">
                   <span className="text-gray-400">•</span>
                   <span>Static JSON files are publicly accessible by direct URL, bypassing password protection (Vercel CDN limitation).</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-gray-400">•</span>
+                  <span>
+                    <strong>CPS interpolation:</strong> phase-space parameters are
+                    interpolated to 1-hourly the same way the energetics are, but
+                    they feed a threshold classification. Labels at interpolated
+                    timesteps are derived, not computed. Use the{" "}
+                    <code className="bg-gray-100 px-1 rounded text-xs">cps_original</code>{" "}
+                    flag to restrict to computed values, and never run
+                    persistence-based statistics on the interpolated series.
+                  </span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-gray-400">•</span>
+                  <span>
+                    <strong>CPS dataset is unpublished.</strong> It has no DOI yet
+                    and is copied into the repository by hand, so this part of the
+                    pipeline is not reproducible from a public download. The
+                    identifier will replace the placeholder once the Zenodo record
+                    is minted.
+                  </span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-gray-400">•</span>
+                  <span>
+                    <strong>Subtropical counts are threshold-sensitive</strong> by a
+                    factor of 6–8 across the threshold sets tested. The two{" "}
+                    <code className="bg-gray-100 px-1 rounded text-xs">TC</code>{" "}
+                    cyclones are unverified candidates. The 500 km phase-space
+                    radius may not represent small, shallow SE-BR systems well.
+                  </span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-gray-400">•</span>
+                  <span>
+                    <strong>The raw tracking catalogue is not ingested yet</strong>,
+                    so the processing-level filter currently reports zero track-only
+                    cyclones, and 1,198 cyclones present in the 100 m wind dataset
+                    are absent from the map.
+                  </span>
                 </li>
               </ul>
             </div>
@@ -433,7 +692,50 @@ export default function AboutPage() {
                 pages="157–167"
                 doi="10.3402/tellusa.v7i2.8796"
               />
+              <Reference
+                authors="Hart, R. E."
+                year="2003"
+                title="A cyclone phase space derived from thermal wind and thermal asymmetry"
+                journal="Monthly Weather Review"
+                volume="131(4)"
+                pages="585–616"
+                doi="10.1175/1520-0493(2003)131<0585:ACPSDF>2.0.CO;2"
+              />
+              <Reference
+                authors="Gozzo, L. F., da Rocha, R. P., Reboita, M. S., & Sugahara, S."
+                year="2014"
+                title="Subtropical cyclones over the southwestern South Atlantic: Climatological aspects and case study"
+                journal="Journal of Climate"
+                volume="27(22)"
+                pages="8543–8562"
+                doi="10.1175/JCLI-D-14-00149.1"
+              />
+              <Reference
+                authors="Guishard, M. P., Evans, J. L., & Hart, R. E."
+                year="2009"
+                title="Atlantic subtropical storms. Part II: Climatology"
+                journal="Journal of Climate"
+                volume="22(13)"
+                pages="3574–3594"
+                doi="10.1175/2008JCLI2346.1"
+              />
+              <Reference
+                authors="Gramcianinov, C. B., Campos, R. M., de Camargo, R., Hodges, K. I., Guedes Soares, C., & da Silva Dias, P. L."
+                year="2020"
+                title="Analysis of Atlantic extratropical storm tracks characteristics in 41 years of ERA5 and CFSR/CFSv2 databases"
+                journal="Ocean Engineering"
+                volume="216C"
+                pages="108111"
+                doi="10.1016/j.oceaneng.2020.108111"
+              />
             </div>
+            <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+              The subtropical/tropical threshold set attributed here to Wood et al.
+              (2023) and to de Souza et al. (2026) follows the protocol documented in
+              the <code className="bg-gray-100 px-1 rounded">paper_energy_patterns</code>{" "}
+              project. Full bibliographic details for those two entries are pending
+              alongside the CPS dataset deposit.
+            </p>
           </section>
 
           {/* Footer */}
@@ -468,34 +770,60 @@ function DataSourceCard({
   doi,
   doiUrl,
   role,
+  pending = false,
+  pendingNote,
 }: {
   title: string;
   description: string;
   citation: string;
-  doi: string;
-  doiUrl: string;
+  /** Omit when the dataset has no DOI yet — pass `pending` instead. */
+  doi?: string;
+  doiUrl?: string;
   role: string;
+  /** True when the dataset is used here but not yet formally published. */
+  pending?: boolean;
+  pendingNote?: string;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-5">
-      <h3 className="font-semibold text-gray-900 mb-2">{title}</h3>
+    <div
+      className={`bg-white border rounded-lg p-5 ${
+        pending ? "border-amber-300" : "border-gray-200"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <h3 className="font-semibold text-gray-900">{title}</h3>
+        {pending && (
+          <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide
+                           bg-amber-100 text-amber-800 border border-amber-300 rounded px-1.5 py-0.5">
+            Unpublished
+          </span>
+        )}
+      </div>
       <p className="text-gray-600 text-sm mb-3">{description}</p>
       <div className="text-sm space-y-2">
         <p className="text-gray-500">
           <span className="font-medium">Citation:</span>{" "}
           <span className="italic">{citation}</span>
         </p>
-        <p>
-          <span className="font-medium text-gray-500">DOI:</span>{" "}
-          <a
-            href={doiUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline"
-          >
-            {doi}
-          </a>
-        </p>
+        {doi && doiUrl ? (
+          <p>
+            <span className="font-medium text-gray-500">DOI:</span>{" "}
+            <a
+              href={doiUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              {doi}
+            </a>
+          </p>
+        ) : (
+          <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+            <span className="font-medium">DOI:</span> not minted yet.{" "}
+            {pendingNote ??
+              "This dataset is still being prepared for deposit; the identifier will be added here once published."}
+          </p>
+        )}
         <p className="text-gray-500">
           <span className="font-medium">Role in this tool:</span> {role}
         </p>
