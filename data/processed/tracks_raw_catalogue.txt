@@ -1,0 +1,58 @@
+======================================================================
+Raw Catalogue Ingestion — Validation Report
+======================================================================
+Generated : 2026-08-13 11:58:38
+Elapsed   : 9.6 s
+
+──────────────────────────────────────────────────────────────────────
+Source
+──────────────────────────────────────────────────────────────────────
+  Gramcianinov et al., Mendeley DOI 10.17632/kwcvfr52hp.4 (v4)
+  Subset: ERA5 / ExSAt (extratropical South Atlantic)
+  Timesteps read : 2,864,233
+  Tracks read    : 29,967
+  Period         : 1979-01-01 → 2020-01-05
+
+──────────────────────────────────────────────────────────────────────
+Deduplication against the monitor's catalogue
+──────────────────────────────────────────────────────────────────────
+  The two datasets are DIFFERENT TRACKING VINTAGES and their
+  track_id numbering does not agree, so pairing is done on
+  (date, lat, lon) rounded to 3 decimals, requiring
+  >= 50% of a catalogue track's timesteps to coincide.
+
+  Catalogue tracks with any overlap  : 5,925
+  Dropped as already processed       : 5,923
+  Retained as track-only             : 24,044
+  Matched pairs sharing the same ID  : 5
+    (near-zero is expected and confirms the renumbering)
+
+──────────────────────────────────────────────────────────────────────
+Output
+──────────────────────────────────────────────────────────────────────
+  Timesteps : 2,277,937
+  Tracks    : 24,044
+  Period    : 1979-01-01 → 2020-01-05
+  ID range  : 119790003 .. 120190741
+  Offset    : source_id + 100,000,000
+  lon       : -180.00 .. 180.00
+  lat       : -86.52 .. -6.71
+  vor42     : 1.020 .. 15.655
+
+──────────────────────────────────────────────────────────────────────
+Caveats
+──────────────────────────────────────────────────────────────────────
+  • These tracks come from the 2020 Mendeley vintage of the TRACK
+    run. The monitor's processed cyclones come from a later vintage
+    (the record's README points to ftp://masterftp.iag.usp.br/EXWAV
+    for updated tracks). The two are NOT the same tracking dataset.
+
+  • The catalogue ends 2020-01-05 while the monitor runs to
+    2021-01-07, so 2020 and 2021 carry almost no track-only cyclones.
+
+  • Deduplication is geometric and therefore imperfect at the margin:
+    a system tracked with a different length or a slightly shifted
+    centre between vintages may fall below the threshold and appear
+    as track-only despite already being present as processed.
+
+======================================================================

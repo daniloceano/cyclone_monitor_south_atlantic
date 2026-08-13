@@ -147,11 +147,19 @@ export default function TrackDetailPanel({
             </p>
           )}
           {track.processed === false && (
-            <p className="text-[10px] text-gray-600 bg-gray-100 border border-gray-200 rounded px-1.5 py-1 leading-tight">
-              Track-only cyclone: position and vorticity from the tracking
-              catalogue, with no energetics, lifecycle phases or phase-space
-              diagnostics.
-            </p>
+            <>
+              {track.src !== undefined && (
+                <InfoRow label="Catalogue ID" value={String(track.src)} />
+              )}
+              <p className="text-[10px] text-gray-600 bg-gray-100 border border-gray-200 rounded px-1.5 py-1 leading-tight">
+                <strong>Track-only cyclone.</strong> Position and vorticity from
+                the raw tracking catalogue — no energetics, lifecycle phases,
+                genesis region, phase space or 100 m wind. It also comes from a
+                different tracking vintage than the processed cyclones, so its
+                trajectory is not directly comparable with theirs. The ID shown
+                in the header is namespaced; the catalogue&apos;s own ID is above.
+              </p>
+            </>
           )}
         </div>
 

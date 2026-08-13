@@ -83,6 +83,15 @@ export default function AboutPage() {
               />
 
               <DataSourceCard
+                title="Full Tracking Catalogue (track-only cyclones)"
+                description="The complete, unfiltered TRACK output for the extratropical South Atlantic: 29,967 cyclones from ERA5, 1979–2019, with position and filtered vorticity only. It supplies the 24,044 'track only' systems shown here — the ones that never received energetics, lifecycle or phase-space processing."
+                citation="Gramcianinov, C. B., Campos, R. M., de Camargo, R., Hodges, K. I., Guedes Soares, C., & da Silva Dias, P. L. (2020). Atlantic extratropical cyclone tracks in 41 years of ERA5 and CFSR/CFSv2 databases (Version 4). Mendeley Data."
+                doi="10.17632/kwcvfr52hp.4"
+                doiUrl="https://doi.org/10.17632/kwcvfr52hp.4"
+                role="Track-only cyclones. NOTE: a different tracking vintage from the processed catalogue — see Data Coverage below"
+              />
+
+              <DataSourceCard
                 title="Lorenz Energy Cycle (LEC) Diagnostics"
                 description="Semi-Lagrangian energetics computed for each cyclone following the system's center. Contains energy reservoirs (Az, Ae, Kz, Ke), conversion terms (Ca, Ck, Ce, Cz), boundary fluxes, and generation terms. LEC climatology for the region is documented in a dedicated study."
                 citation="De Souza, D. C., Silva Dias, P. L. D., Gramcianinov, C. B., & Camargo, R. (2025). Lorenz Energy Cycle Climatology for the Southwestern Atlantic Cyclones. Climate Dynamics, 63(11), 1–26."
@@ -216,22 +225,48 @@ export default function AboutPage() {
 
             <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm">
               <p className="font-medium text-gray-800 mb-1">
-                Processing levels — and what is still missing
+                Processing levels
               </p>
-              <p className="text-gray-600 leading-relaxed">
-                The interface distinguishes <strong>processed</strong> cyclones
-                (full diagnostic stack: energetics, phases, genesis region) from{" "}
-                <strong>track-only</strong> cyclones taken from the raw tracking
-                catalogue. In the current build every cyclone is processed and the
-                track-only count is zero: the full unfiltered catalogue
-                (Gramcianinov et al., Mendeley{" "}
-                <code className="bg-gray-100 px-1 rounded text-xs">10.17632/kwcvfr52hp.4</code>
-                ) has <strong>not been ingested yet</strong>. The filter and the
-                data model are already in place, so those tracks appear as soon as
-                the catalogue is merged in. Note also that the published Mendeley
-                version covers ERA5 only through <strong>2019</strong>, while this
-                catalogue runs to January 2021 — the two do not span the same period.
+              <p className="text-gray-600 leading-relaxed mb-3">
+                The interface distinguishes <strong>processed</strong> cyclones —
+                6,789 with the full diagnostic stack — from{" "}
+                <strong>track-only</strong> cyclones: 24,044 systems taken from the
+                full Gramcianinov tracking catalogue that carry position and
+                vorticity and nothing else. Track-only cyclones are loaded from a
+                separate file only when the processing filter asks for them, and
+                they cannot be filtered by genesis region or structural type,
+                because they have neither.
               </p>
+              <div className="bg-amber-50 border border-amber-200 rounded p-3">
+                <p className="font-medium text-amber-900 mb-1">
+                  The two sets come from different tracking vintages
+                </p>
+                <p className="text-amber-800 leading-relaxed">
+                  This is the caveat to carry. The processed catalogue comes from a
+                  later TRACK run than the published Mendeley v4 archive, and the
+                  two <strong>do not share a track numbering</strong>: of the 4,072
+                  IDs present in both, <strong>none</strong> refer to the same
+                  storm. Cyclone 19810002, for instance, sits at 29.1°S in one and
+                  54.4°S in the other.
+                </p>
+                <p className="text-amber-800 leading-relaxed mt-2">
+                  Cyclones are therefore paired <strong>geometrically</strong>, on
+                  matching date and position — which works because positions agree
+                  to about 10⁻⁶ degrees when it is genuinely the same system. 5,923
+                  catalogue tracks were identified this way as already present and
+                  dropped, leaving 24,044 genuinely unprocessed ones. Their IDs are
+                  shifted by 100,000,000 so they cannot collide with the processed
+                  catalogue&apos;s; each track panel shows the original catalogue ID.
+                </p>
+                <p className="text-amber-800 leading-relaxed mt-2">
+                  Two consequences worth knowing: the deduplication is geometric and
+                  imperfect at the margin, so a system tracked with a slightly
+                  different centre between vintages may still appear twice; and the
+                  Mendeley archive ends <strong>2020-01-05</strong> while the
+                  processed catalogue runs to January 2021, so 2020 and 2021 carry
+                  almost no track-only cyclones.
+                </p>
+              </div>
             </div>
           </section>
 
@@ -647,10 +682,22 @@ export default function AboutPage() {
                 <li className="flex gap-2">
                   <span className="text-gray-400">•</span>
                   <span>
-                    <strong>The raw tracking catalogue is not ingested yet</strong>,
-                    so the processing-level filter currently reports zero track-only
-                    cyclones, and 1,198 cyclones present in the 100 m wind dataset
-                    are absent from the map.
+                    <strong>Track-only cyclones are a different tracking vintage.</strong>{" "}
+                    They are deduplicated against the processed catalogue
+                    geometrically rather than by ID, which is imperfect at the
+                    margin: a system whose centre shifted between vintages may
+                    appear twice. They also stop at 2020-01-05, and carry no wind
+                    data — the 100 m wind dataset is keyed to the processed
+                    catalogue&apos;s numbering.
+                  </span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-gray-400">•</span>
+                  <span>
+                    1,198 cyclones present in the 100 m wind dataset are still absent
+                    from the map: they carry no centre position in any ingested
+                    source. Their centres are in principle recoverable from the wind
+                    quadrant geometry, but that has not been done.
                   </span>
                 </li>
               </ul>

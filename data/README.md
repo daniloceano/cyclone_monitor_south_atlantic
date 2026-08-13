@@ -520,6 +520,68 @@ Full method, statistics and caveats: `scripts/cps_analysis/SCIENTIFIC_NOTES.md` 
 
 ---
 
+## 🌍 Dataset 6: Full Tracking Catalogue (track-only cyclones)
+
+**Source**: Mendeley Data [10.17632/kwcvfr52hp.4](https://doi.org/10.17632/kwcvfr52hp.4) (v4)
+**Local**: `data/raw/gramcianinov_catalogue/ERA5/ExSAt/` (164 MB, gitignored)
+
+The complete, unfiltered TRACK output: **29,967** South Atlantic cyclones from ERA5,
+1979–2019, carrying position and filtered vorticity and nothing else.
+
+### Acquisition
+
+```bash
+python3 scripts/data/download_full_catalogue.py     # ~171 MB
+python3 scripts/data/ingest_raw_catalogue.py        # dedup + namespacing
+python3 scripts/preprocess_raw_tracks.py            # → site JSON
+```
+
+The Mendeley public API does **not** enumerate a record's subfolders — listing the root
+returns only `README.txt`. The working route is the bulk endpoint
+`https://data.mendeley.com/public-api/zip/{record}/download/{version}`, which redirects to a
+*signed* S3 URL; hitting the bucket directly returns 403.
+
+Archive layout: `{ERA5,CFS}/{ExSAt,ExNAt}/ff_cyc_{area}_{source}_YYYYMM.csv`, no header,
+columns `track_id, date, longitude (0–360), latitude, T42 vorticity`. Monthly files hold every
+track that *starts* in that month.
+
+### ⚠️ Different tracking vintage — never join on `track_id`
+
+This catalogue and Dataset 1 are **different TRACK runs** and their numbering does not agree:
+
+| Check | Result |
+|---|---|
+| IDs present in both | 4,072 |
+| ...whose trajectories agree | **0 (0.000 %)** |
+| Monitor tracks matched **by geometry** | 5,923 (92.0 % of timesteps) |
+| ...matching ≥ 90 % of their timesteps | 5,922 |
+| ...that happen to share an ID | 5 |
+
+Cyclone `19810002` is at 29.1°S in Dataset 1 and at 54.4°S here. Positions agree to ~1e-6°
+when it *is* the same system, so `ingest_raw_catalogue.py` pairs cyclones on
+(`date`, `lat`, `lon`) and drops the 5,923 already processed, leaving **24,044** track-only
+systems. Their IDs are shifted by **+100,000,000** (`source_id` keeps the original) so they
+cannot collide with Dataset 1's primary key.
+
+Also note: 715 cyclones of Dataset 1 have no counterpart here even inside this catalogue's
+period, and the archive ends **2020-01-05** while Dataset 1 runs to 2021-01-07 — so 2020 and
+2021 carry almost no track-only cyclones. The record's README points to
+`ftp://masterftp.iag.usp.br/EXWAV` for updated tracks; Dataset 1's vintage is presumably from
+there.
+
+### Products
+
+| File | Content | Size |
+|---|---|---|
+| `data/processed/tracks_raw_catalogue.csv` | 2,277,937 timesteps, 24,044 tracks | 160 MB |
+| `site/public/data/summary_raw.json` | per-track metadata, fetched lazily | 25 MB |
+| `site/public/data/details_raw/{year}.json` | columnar timesteps (`t0`/`dt`/`x`/`y`/`v`) | 53 MB |
+
+The columnar layout is ~3× smaller than an array of objects, which matters because a raw
+timestep is four numbers and the key names would otherwise outweigh the data.
+
+---
+
 ## 🗺️ Dataset 4: Brazilian Sedimentary Basins
 
 **Location**: `data/sedimentary_basins/`

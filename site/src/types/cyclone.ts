@@ -34,13 +34,20 @@ export interface TrackSummary {
   quantile: "top 5%" | "top 10%" | "top 25%" | "top 50%" | "bottom 50%";
   /**
    * True when the cyclone carries the full diagnostic stack (LEC energetics +
-   * lifecycle phases + genesis region). False for "raw" tracks that exist in the
-   * tracking catalogue but were never processed.
+   * lifecycle phases + genesis region). False for track-only cyclones from the
+   * raw tracking catalogue, which carry position and vorticity alone.
    *
-   * NOTE: raw-catalogue tracks are not ingested yet, so every track currently
-   * reports true. The filter is in place so they light up when merged in.
+   * Track-only cyclones are loaded from separate files (summary_raw.json) and
+   * come from a DIFFERENT TRACKING VINTAGE than the processed ones — see the
+   * About page. Their IDs are namespaced via `src`.
    */
   processed: boolean;
+  /**
+   * Original catalogue ID, present only on track-only cyclones. Their `id` is
+   * namespaced (`src + 100_000_000`) because the raw catalogue is a different
+   * tracking vintage whose numbering collides with the processed catalogue's.
+   */
+  src?: number;
   /** CPS phase_class code (EC, SC, ST, SD, EC_like, …). Absent without CPS. */
   cps_class?: string;
   /** Human-readable expansion of cps_class. */
@@ -145,7 +152,14 @@ export interface Timestep {
    * Lifecycle phase, following the Cyclophaser convention
    * (de Souza et al., JOSS 2025; IJC 2024).
    */
-  phase: "incipient" | "intensification" | "mature" | "decay" | "dissipation";
+  phase:
+    | "incipient"
+    | "intensification"
+    | "mature"
+    | "decay"
+    | "dissipation"
+    /** Track-only cyclones carry no lifecycle classification. */
+    | "unknown";
   // Lorenz Energy Cycle diagnostics (de Souza et al., Climate Dynamics 2025).
   // Originally 3-hourly, interpolated to 1-hourly in preprocessing.
   /** Zonal available potential energy (J m⁻²). */
@@ -227,6 +241,65 @@ export interface TrackDetail {
   timesteps: Timestep[];
 }
 
+// ─── Track-only (raw catalogue) types ─────────────────────────────────────────
+// Produced by scripts/preprocess_raw_tracks.py. These cyclones come from the
+// full Gramcianinov tracking catalogue and carry position and vorticity only.
+//
+// They live in separate files (summary_raw.json, details_raw/{year}.json) and
+// are fetched lazily, because there are ~4x as many of them as processed
+// cyclones and folding them into summary.json would triple the initial load.
+
+/** One entry in summary_raw.json → tracks[]. Leaner than TrackSummary. */
+export interface RawTrackSummary {
+  /** Namespaced ID: src + id_offset. */
+  id: number;
+  /** Original catalogue ID (YYYYNNNN in the raw catalogue's own numbering). */
+  src: number;
+  year: number;
+  month: number;
+  start: string;
+  end: string;
+  duration_h: number;
+  genesis_lat: number;
+  genesis_lon: number;
+  lysis_lat: number;
+  lysis_lon: number;
+  max_vor42: number;
+  coords: [number, number][];
+}
+
+/** Root structure of public/data/summary_raw.json. */
+export interface RawSummaryData {
+  generated: string;
+  total_tracks: number;
+  date_range: { start: string; end: string };
+  years: number[];
+  months: number[];
+  /** Offset applied to the original IDs to build `id`. */
+  id_offset: number;
+  source: { doi: string; label: string };
+  tracks: RawTrackSummary[];
+}
+
+/**
+ * Columnar per-track detail. Parallel arrays rather than an array of objects:
+ * a raw timestep is four numbers, so object keys would dominate the payload.
+ * `dt` holds hours since `t0`, which keeps gaps explicit.
+ */
+export interface RawTrackDetail {
+  t0: string;
+  dt: number[];
+  x: number[];
+  y: number[];
+  v: number[];
+}
+
+/** Root structure of public/data/details_raw/{year}.json. */
+export interface RawYearDetails {
+  year: number;
+  tracks: Record<string, RawTrackDetail>;
+}
+
 /** Root structure of public/data/details/{year}.json. */
 export interface YearDetails {
   year: number;
@@ -283,7 +356,12 @@ export const EMPTY_FILTERS: FilterState = {
   cpsGroups: [],
   cpsClasses: [],
   warmSeclusionOnly: false,
-  processing: "all",
+  /**
+   * Defaults to "processed", not "all", on purpose: track-only cyclones live in
+   * a separate ~25 MB file that is only fetched when the filter asks for them.
+   * Defaulting to "all" would pull it on every first paint and undo the split.
+   */
+  processing: "processed",
   intensity: EMPTY_INTENSITY,
 };
 
@@ -341,6 +419,7 @@ export const PHASE_COLORS: Record<string, string> = {
   mature:          "#ea9393",
   decay:           "#ccd3bf",
   dissipation:     "#9e9e9e",   // gray for residual/dissipation
+  unknown:         "#cbd5e1",   // track-only cyclones: no lifecycle classification
 };
 
 export const PHASE_LABELS: Record<string, string> = {
@@ -349,6 +428,7 @@ export const PHASE_LABELS: Record<string, string> = {
   mature:          "Mature",
   decay:           "Decay",
   dissipation:     "Dissipation",
+  unknown:         "Not classified",
 };
 
 // ─── Wind100 types ────────────────────────────────────────────────────────────

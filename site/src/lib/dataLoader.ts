@@ -44,6 +44,104 @@ export function getTrackDetail(
   return yearDetails.tracks[String(trackId)] ?? null;
 }
 
+// ─── Track-only (raw catalogue) loaders ───────────────────────────────────────
+//
+// These are fetched lazily: summary_raw.json is ~25 MB against summary.json's
+// ~11 MB, and most sessions never ask for track-only cyclones. Nothing here is
+// requested until the processing filter includes them.
+
+import {
+  RawSummaryData,
+  RawYearDetails,
+  RawTrackDetail,
+  TrackSummary,
+  Timestep,
+} from "@/types/cyclone";
+
+let rawSummaryCache: RawSummaryData | null = null;
+const rawDetailsCache = new Map<number, RawYearDetails>();
+
+/**
+ * Load summary_raw.json. Returns null (no throw) when absent — the raw
+ * catalogue is optional and the app degrades to processed cyclones only.
+ */
+export async function loadRawSummary(): Promise<RawSummaryData | null> {
+  if (rawSummaryCache) return rawSummaryCache;
+  try {
+    const res = await fetch("/data/summary_raw.json");
+    if (!res.ok) return null;
+    rawSummaryCache = (await res.json()) as RawSummaryData;
+    return rawSummaryCache;
+  } catch {
+    return null;
+  }
+}
+
+/** Load details_raw/{year}.json. Cached after first load. */
+export async function loadRawYearDetails(year: number): Promise<RawYearDetails | null> {
+  if (rawDetailsCache.has(year)) return rawDetailsCache.get(year)!;
+  try {
+    const res = await fetch(`/data/details_raw/${year}.json`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as RawYearDetails;
+    rawDetailsCache.set(year, data);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Adapt raw track summaries into the shape the rest of the app consumes.
+ *
+ * Track-only cyclones have no genesis region, no structural class and no
+ * lifecycle phases, so those fields are left absent and `processed` is false.
+ * Every component already branches on `processed` or on the presence of the
+ * optional fields, which keeps a single code path for both kinds of cyclone.
+ *
+ * The intensity quantile is deliberately NOT assigned: the thresholds in
+ * summary.json were computed over the processed catalogue, and labelling a
+ * different tracking vintage against them would imply a comparability that has
+ * not been established. Intensity colouring still works, since it reads
+ * max_vor42 directly.
+ */
+export function adaptRawSummaries(raw: RawSummaryData): TrackSummary[] {
+  return raw.tracks.map((t) => ({
+    id: t.id,
+    src: t.src,
+    year: t.year,
+    month: t.month,
+    start: t.start,
+    end: t.end,
+    duration_h: t.duration_h,
+    genesis_lat: t.genesis_lat,
+    genesis_lon: t.genesis_lon,
+    lysis_lat: t.lysis_lat,
+    lysis_lon: t.lysis_lon,
+    genesis_region: "Unclassified",
+    max_vor42: t.max_vor42,
+    quantile: "bottom 50%" as const,
+    processed: false,
+    coords: t.coords,
+  }));
+}
+
+/**
+ * Expand a columnar raw detail into the Timestep array the panels expect.
+ * Only date, position and vorticity exist; `phase` is "unknown" so the phase
+ * colour and label maps resolve without special-casing.
+ */
+export function expandRawDetail(detail: RawTrackDetail): Timestep[] {
+  const t0 = new Date(detail.t0 + "Z").getTime();
+  return detail.dt.map((hours, i) => ({
+    date: new Date(t0 + hours * 3600_000).toISOString().slice(0, 19),
+    lon: detail.x[i],
+    lat: detail.y[i],
+    vor42: detail.v[i],
+    phase: "unknown" as const,
+  }));
+}
+
 // ─── Wind100 loaders ──────────────────────────────────────────────────────────
 
 let wind100MetaCache: Wind100Meta | null = null;

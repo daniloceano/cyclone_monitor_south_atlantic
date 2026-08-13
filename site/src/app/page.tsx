@@ -26,6 +26,10 @@ import {
   loadWind100Year,
   loadBasins,
   loadBasinIntersections,
+  loadRawSummary,
+  loadRawYearDetails,
+  adaptRawSummaries,
+  expandRawDetail,
 } from "@/lib/dataLoader";
 import { filterTracks, filterTracksByBasin } from "@/lib/filters";
 
@@ -65,6 +69,10 @@ export default function HomePage() {
   const [wind100YearData, setWind100YearData] = useState<Wind100YearData | null>(null);
   const [wind100Metric, setWind100Metric] = useState<Wind100Metric>("max");
 
+  // ── Track-only (raw catalogue) state ───────────────────────────────────────
+  const [rawTracks, setRawTracks] = useState<TrackSummary[] | null>(null);
+  const [rawLoading, setRawLoading] = useState(false);
+
   // ── Basin state ────────────────────────────────────────────────────────────
   const [basinCollection, setBasinCollection] = useState<BasinCollection | null>(null);
   const [basinIntersections, setBasinIntersections] = useState<BasinIntersections | null>(null);
@@ -91,15 +99,34 @@ export default function HomePage() {
       });
   }, []);
 
+  // ── Track-only cyclones (lazy) ─────────────────────────────────────────────
+  // summary_raw.json is ~25 MB, so it is fetched only once the processing
+  // filter actually asks for track-only cyclones — never on first paint.
+  const needsRaw = filters.processing !== "processed";
+
+  useEffect(() => {
+    if (!needsRaw || rawTracks !== null || rawLoading) return;
+    setRawLoading(true);
+    loadRawSummary()
+      .then((raw) => setRawTracks(raw ? adaptRawSummaries(raw) : []))
+      .catch(() => setRawTracks([]))
+      .finally(() => setRawLoading(false));
+  }, [needsRaw, rawTracks, rawLoading]);
+
   // ── Filtered track list ────────────────────────────────────────────────────
   const filteredTracks = useMemo(() => {
     if (!summaryData) return [];
-    // Apply standard filters (year, month, region)
-    let tracks = filterTracks(summaryData.tracks, filters);
+    // Processed cyclones plus, when requested and already fetched, track-only ones
+    const all =
+      needsRaw && rawTracks
+        ? [...summaryData.tracks, ...rawTracks]
+        : summaryData.tracks;
+    // Apply standard filters (year, month, region, type, processing, intensity)
+    let tracks = filterTracks(all, filters);
     // Apply basin filter
     tracks = filterTracksByBasin(tracks, basinFilter, basinIntersections);
     return tracks;
-  }, [summaryData, filters, basinFilter, basinIntersections]);
+  }, [summaryData, rawTracks, needsRaw, filters, basinFilter, basinIntersections]);
 
   // ── Per-track wind100 lookup for the selected track ────────────────────────
   const wind100TrackData = useMemo((): Record<string, Wind100TimestepEntry> | null => {
@@ -118,13 +145,23 @@ export default function HomePage() {
     setWind100YearData(null); // clear stale data while loading
 
     try {
-      const [yearDetails, w100Year] = await Promise.all([
-        loadYearDetails(track.year),
-        loadWind100Year(track.year), // null if wind100 data absent
-      ]);
-      const detail = getTrackDetail(yearDetails, track.id);
-      setTimesteps(detail?.timesteps ?? []);
-      setWind100YearData(w100Year);
+      if (!track.processed) {
+        // Track-only cyclone: columnar details, and no wind100 lookup — the
+        // wind100 dataset is keyed by the processed catalogue's own IDs, which
+        // are a different tracking vintage from these tracks.
+        const rawYear = await loadRawYearDetails(track.year);
+        const detail = rawYear?.tracks[String(track.id)] ?? null;
+        setTimesteps(detail ? expandRawDetail(detail) : []);
+        setWind100YearData(null);
+      } else {
+        const [yearDetails, w100Year] = await Promise.all([
+          loadYearDetails(track.year),
+          loadWind100Year(track.year), // null if wind100 data absent
+        ]);
+        const detail = getTrackDetail(yearDetails, track.id);
+        setTimesteps(detail?.timesteps ?? []);
+        setWind100YearData(w100Year);
+      }
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : "Failed to load track details.");
     } finally {

@@ -107,6 +107,14 @@ data/processed/tracks_by_id/*
 # Committed for Vercel deployments (same strategy as details/). Un-comment to exclude locally.
 # site/public/data/wind100/
 
+# Track-only cyclone artefacts (~78 MB), regeneratable from the raw catalogue:
+#   python scripts/data/download_full_catalogue.py
+#   python scripts/data/ingest_raw_catalogue.py
+#   python scripts/preprocess_raw_tracks.py
+# Committed for Vercel deployments. Un-comment to exclude locally.
+# site/public/data/summary_raw.json
+# site/public/data/details_raw/
+
 # Build artifacts
 .vercel/
 .turbo/

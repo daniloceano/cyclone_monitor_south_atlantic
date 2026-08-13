@@ -370,14 +370,21 @@ export default function FilterPanel({
             ))}
             <p className="text-[10px] text-gray-400 leading-tight pt-1">
               <span className="font-medium text-gray-500">Processed</span> cyclones
-              carry LEC energetics, lifecycle phases and a genesis region.{" "}
-              <span className="font-medium text-gray-500">Track only</span> cyclones
-              come from the raw tracking catalogue with position and vorticity
-              alone.
+              carry LEC energetics, lifecycle phases, phase space and a genesis
+              region. <span className="font-medium text-gray-500">Track only</span>{" "}
+              cyclones come from the raw tracking catalogue with position and
+              vorticity alone.
+              {summaryData.processing_levels.raw > 0 && (
+                <span className="block mt-1 text-amber-600">
+                  Track-only cyclones come from a different tracking vintage than
+                  the processed ones and load a separate ~25 MB file on first use.
+                  See the About page.
+                </span>
+              )}
               {summaryData.processing_levels.raw === 0 && (
                 <span className="block mt-1 text-amber-600">
-                  The raw catalogue is not ingested yet, so every cyclone here is
-                  fully processed.
+                  The raw catalogue is not ingested in this build, so every
+                  cyclone here is fully processed.
                 </span>
               )}
             </p>
