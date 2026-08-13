@@ -97,22 +97,53 @@ CPS_CLASS_LABELS = {
     "SD":           "Subtropical decay (SC→EC)",
     "TT":           "Tropical transition",
     "ET":           "Extratropical transition",
-    "EC_like":      "Extratropical-like",
-    "SC_like":      "Hybrid-like",
-    "TC_like":      "Warm-core-like",
+    "EC_like":      "Extratropical characteristics (not sustained 36 h)",
+    "SC_like":      "Hybrid characteristics (not sustained 36 h)",
+    "TC_like":      "Warm-core characteristics (not sustained 36 h)",
     "undetermined": "Undetermined",
     "no_cps_data":  "No CPS data",
 }
 
-# Coarse grouping used by the type filter, so the UI can offer a short list
-# without hiding the detail (the exact phase_class is kept per track).
+# Grouping used by the type filter.
+#
+# TWO RULES, both learned the hard way:
+#
+#   1. A `*_like` class is NEVER grouped with the class it resembles. Those are
+#      CHARACTERISTICS, not identifications: the structure was shown but never
+#      sustained for the 36 h gate, and none of the identification guards
+#      (genesis band, ocean, warm-seclusion test) was applied to it. Folding
+#      `SC_like` into "Subtropical" asserts exactly what the classification
+#      refuses to assert — and it is what put 548 unguarded cyclones, 68% of
+#      them with genesis outside 20-40 S, under the "Subtropical" filter, plus
+#      two `TC_like` at 44 S and 52 S under "Tropical".
+#
+#   2. Transitions are kept apart by TYPE. EC->SC and SC->EC are opposite
+#      pathways and "Transition" hid that.
+#
+# The source of truth for rule 1 is the `class_kind` / `is_identified` columns of
+# cps_classification_SAt.csv; this map must stay consistent with them.
 CPS_CLASS_GROUPS = {
-    "EC": "Extratropical", "EC_like": "Extratropical",
-    "SC": "Subtropical", "SC_like": "Subtropical",
-    "TC": "Tropical", "TC_like": "Tropical",
-    "ST": "Transition", "SD": "Transition", "TT": "Transition", "ET": "Transition",
+    "EC": "Extratropical",
+    "SC": "Subtropical",
+    "TC": "Tropical",
+    "ST": "Subtropical transition",
+    "SD": "Subtropical decay",
+    "TT": "Tropical transition",
+    "ET": "Extratropical transition",
+    "EC_like": "Not sustained (<36 h)",
+    "SC_like": "Not sustained (<36 h)",
+    "TC_like": "Not sustained (<36 h)",
     "undetermined": "Undetermined",
     "no_cps_data": "No CPS data",
+}
+
+# Groups that represent an actual identification. The UI can use this to keep
+# the descriptive groups visually and semantically separate from the identified
+# ones.
+CPS_IDENTIFIED_GROUPS = {
+    "Extratropical", "Subtropical", "Tropical",
+    "Subtropical transition", "Subtropical decay",
+    "Tropical transition", "Extratropical transition",
 }
 
 # Number of histogram bins for the intensity (vor42) distribution shown in the
@@ -243,10 +274,16 @@ def load_cps_classification(path: Path) -> dict:
         seq = r.get("state_sequence")
         if isinstance(seq, float) and math.isnan(seq):
             seq = None
+        group = CPS_CLASS_GROUPS.get(code, "Undetermined")
         out[int(r["track_id"])] = {
             "cls":       code,
             "label":     CPS_CLASS_LABELS.get(code, code),
-            "group":     CPS_CLASS_GROUPS.get(code, "Undetermined"),
+            "group":     group,
+            # Read from the export when present; the map is the fallback so an
+            # older CSV still yields a correct flag.
+            "identified": bool(r["is_identified"]) if "is_identified" in r
+                          and pd.notna(r.get("is_identified"))
+                          else group in CPS_IDENTIFIED_GROUPS,
             "seq":       str(seq) if seq is not None else None,
             "warm_secl": bool(n_ws and n_ws > 0),
         }
@@ -444,6 +481,7 @@ def main():
             entry["cps_class"] = cps_info["cls"]
             entry["cps_label"] = cps_info["label"]
             entry["cps_group"] = cps_info["group"]
+            entry["cps_identified"] = cps_info["identified"]
             if cps_info["seq"]:
                 entry["cps_seq"] = cps_info["seq"]
             if cps_info["warm_secl"]:
@@ -495,6 +533,12 @@ def main():
                 cps_cls = row.get("cps_class")
                 if isinstance(cps_cls, str):
                     ts["cps_class"] = cps_cls
+                # The guarded view: the accepted persistent state covering this
+                # timestep, empty when none. cps_class alone is the raw
+                # threshold label and carries no persistence and no guards.
+                cps_st = row.get("cps_state")
+                if isinstance(cps_st, str) and cps_st:
+                    ts["cps_state"] = cps_st
                 size_km = safe_float(row.get("cps_size_km"), 1)
                 if size_km is not None:
                     ts["cps_size_km"] = size_km

@@ -396,7 +396,15 @@ extratropical, subtropical or tropical in structure.
 | `dir` | float64 | Storm motion direction (°) |
 | `lat`, `lon` | float64 | Position at that timestep (°) |
 | `over_ocean` | bool | Centre over ocean |
-| `cps_class` | string | Per-timestep label: `extratropical`, `subtropical`, `tropical`, `unclassified` |
+| `cps_class` | string | **Raw** per-timestep threshold label: `extratropical`, `subtropical`, `tropical`, `unclassified`. No persistence, no guards |
+| `cps_state` | string | **Guarded** view: the accepted persistent state covering that timestep (`EC`, `SC`, `TC`), empty when none |
+
+> **`cps_class` and `cps_state` are not interchangeable.** `cps_class` is the label of a
+> single timestep against the thresholds — the right thing to colour a phase diagram by, and
+> the wrong thing to count cyclone types with. `cps_state` is what survived the 36 h
+> persistence gate *and* the identification guards. In this dataset the raw label marks
+> 128,399 timesteps "subtropical" at a median latitude of 49.7°S; the guarded state marks
+> 16,210 at 32.9°S. The difference is warm-seclusion contamination.
 
 > **Native step is 3-hourly.** The exported file is left at 3-hourly on purpose: the CPS
 > series feed a threshold classification, so interpolated points would be labelled from
@@ -430,6 +438,8 @@ so a join on `track_id` never silently drops them.
 |--------|-------------|
 | `track_id`, `year`, `region`, `genesis_lat`, `genesis_lon`, `ep` | Identity; `ep` is the Energy Pattern where one exists |
 | `has_cps` | False for the 13 cyclones with no CPS series (one 2002, twelve 2009) |
+| `class_kind` | `identified` · `characteristic` · `undetermined` · `no_data` — **read this before grouping** |
+| `is_identified` | True only for EC, SC, TC, ST, SD, TT, ET |
 | `phase_class` | **The classification.** See the table below |
 | `phase_class_label` | Human-readable expansion of `phase_class` |
 | `genesis_state`, `genesis_onset_h`, `pure_genesis` | First persistent state and how long after genesis it began |
@@ -452,6 +462,14 @@ so a join on `track_id` never silently drops them.
 | `TC_like` | 2 | 0.03% | warm-core characteristics, never sustained 36 h |
 | `undetermined` | 636 | 9.37% | no structure held long enough, none dominant |
 | `no_cps_data` | 13 | 0.19% | no CPS series computed |
+
+> **Never group a `*_like` class with the class it resembles.** They are *characteristics*,
+> not identifications: the structure was shown but never sustained for 36 h, and none of the
+> identification guards was applied to it. 68% of `SC_like` cyclones have genesis outside
+> 20–40°S and both `TC_like` cyclones formed at 44°S and 52°S. Folding them in is what
+> briefly made the site report 730 "Subtropical" and 4 "Tropical" cyclones instead of 182
+> and 2. Use `is_identified` / `class_kind`; the site's `CPS_CLASS_GROUPS` now keeps them in
+> a separate `Not sustained (<36 h)` group.
 
 ### Classification protocol
 
@@ -491,6 +509,10 @@ Gozzo et al.'s 7.2; without the guards it is 18.0.
 - The subtropical count is threshold-sensitive by a factor of 6–8 across the threshold sets
   tested; quote any subtropical number with its threshold set attached.
 - The 500 km CPS radius may not represent small, shallow SE-BR systems well.
+- Gozzo's genesis-band criterion is on **cyclogenesis**, so an identified `SC` may travel
+  poleward of 40°S during its hybrid run — guarded `SC` timesteps reach 71°S. The guard on
+  the *run* itself applies to the tropical class only (equatorward of 40°S), which is why
+  guarded `TC` timesteps span just 27.7–31.8°S.
 
 Full method, statistics and caveats: `scripts/cps_analysis/SCIENTIFIC_NOTES.md` in the
 `paper_energy_patterns` project. Regenerate these files with

@@ -112,6 +112,7 @@ CPS_RENAMES = {
     "dir": "cps_dir",
     "over_ocean": "cps_over_ocean",
     "cps_class": "cps_class",
+    "cps_state": "cps_state",
 }
 
 # Classification thresholds, after de Souza et al. (2026), taking
@@ -141,7 +142,7 @@ COLUMN_ORDER = [
     "region", "period",
     # Cyclone Phase Space (3-hourly source, interpolated to 1-hourly)
     # cps_original mirrors lec_original: True = value computed at this timestep.
-    "cps_original", "cps_class", "cps_B", "cps_VTL", "cps_VTU",
+    "cps_original", "cps_class", "cps_state", "cps_B", "cps_VTL", "cps_VTU",
     "cps_size_km", "cps_dir", "cps_over_ocean",
     # Energy reservoirs
     "Az", "Ae", "Kz", "Ke",
@@ -303,6 +304,12 @@ def merge_cps(df: pd.DataFrame) -> pd.DataFrame:
       - dir               : circular interpolation (see _interpolate_circular)
       - over_ocean        : forward/backward fill within the track (a slowly
                             varying geographic property, not a smooth number)
+      - cps_state         : the GUARDED view — the accepted persistent state
+                            covering the timestep, or empty. Filled only INSIDE
+                            a run (between its own 3-hourly endpoints), never
+                            derived from thresholds: a state is the outcome of
+                            persistence AND the identification guards, neither
+                            of which can be recomputed from a single row.
       - cps_class         : NOT interpolated. Original labels are preserved
                             verbatim; interpolated rows are labelled by applying
                             the published thresholds to the interpolated
@@ -338,6 +345,8 @@ def merge_cps(df: pd.DataFrame) -> pd.DataFrame:
     # clobber it when we later fill interpolated rows.
     cps["_cps_class_orig"] = cps["cps_class"]
     cps = cps.drop(columns=["cps_class"])
+    if "cps_state" in cps.columns:
+        cps["cps_state"] = cps["cps_state"].fillna("")
 
     # Provenance: a row is "original" when the phase-space parameters were
     # actually computed there. 3-hourly rows whose B/VTL/VTU are NaN (the
@@ -373,6 +382,17 @@ def merge_cps(df: pd.DataFrame) -> pd.DataFrame:
         df["cps_over_ocean"] = grouped["cps_over_ocean"].transform(
             lambda s: s.ffill().bfill()
         )
+
+    # cps_state: fill the two 1-hourly gaps INSIDE a run. A forward fill bounded
+    # by a backward fill of the same width confines the fill to the span between
+    # the run's own 3-hourly endpoints, so no timestep outside an accepted run
+    # ever acquires a state — an unbounded ffill would extend every run to the
+    # end of the track.
+    if "cps_state" in df.columns:
+        def _fill_state(s):
+            v = s.replace("", pd.NA)
+            return v.ffill(limit=2).where(v.bfill(limit=2).notna())
+        df["cps_state"] = grouped["cps_state"].transform(_fill_state).fillna("")
 
     # ── Labels ────────────────────────────────────────────────────────────────
     derived = _classify_cps(df["cps_B"], df["cps_VTL"], df["cps_VTU"])

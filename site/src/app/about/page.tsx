@@ -488,14 +488,46 @@ export default function AboutPage() {
                       2009; Gozzo et al. 2014). Persistent runs are then guarded,
                       because the phase space alone cannot separate a genuine
                       diabatic warm core from a Shapiro–Keyser{" "}
-                      <strong>warm seclusion</strong>: subtropical runs must begin
-                      between 20°S and 40°S, spend at least half their time over
-                      ocean, and start no more than 12 h after the cyclone&apos;s own
-                      intensity peak. Of 804 persistent hybrid runs, 271 survived
-                      these guards; 395 were rejected for out-of-band genesis and
-                      138 as warm seclusions. The interface exposes the rejected
-                      warm-seclusion systems as their own filter.
+                      <strong>warm seclusion</strong>. A hybrid run is accepted only
+                      if the cyclone underwent <em>cyclogenesis</em> between 20°S and
+                      40°S (Gozzo criterion 1 — a condition on genesis, not on where
+                      the run happens), spent at least half the run over ocean, and
+                      began no more than 12 h after the cyclone&apos;s own intensity
+                      peak. That last clause is the physical one: a diabatically built
+                      warm core re-energises the system, so peak intensity follows the
+                      structure, whereas a secluded warm core is the terminal stage of
+                      a baroclinic life cycle and the peak has already passed. Of 804
+                      persistent hybrid runs, 271 survived; 395 were rejected for
+                      out-of-band genesis and 138 as warm seclusions. The interface
+                      exposes the rejected warm-seclusion systems as their own filter.
                     </p>
+                    <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm mb-3">
+                      <p className="font-medium mb-1">
+                        Identification vs description
+                      </p>
+                      <p className="text-gray-700">
+                        The classes ending in{" "}
+                        <code className="bg-white px-1 rounded text-xs">_like</code> —{" "}
+                        <code className="bg-white px-1 rounded text-xs">SC_like</code>,{" "}
+                        <code className="bg-white px-1 rounded text-xs">TC_like</code>,{" "}
+                        <code className="bg-white px-1 rounded text-xs">EC_like</code> —
+                        are <strong>not</strong> claims that the cyclone is of that type.
+                        They record a structure that was shown but never sustained for
+                        36 h, and none of the guards above was applied to them: 68% of{" "}
+                        <code className="bg-white px-1 rounded text-xs">SC_like</code>{" "}
+                        cyclones formed outside the 20–40°S band, and both{" "}
+                        <code className="bg-white px-1 rounded text-xs">TC_like</code>{" "}
+                        systems formed at 44°S and 52°S. They are therefore filtered
+                        under <strong>Not sustained (&lt;36 h)</strong>, never under
+                        Subtropical or Tropical.
+                      </p>
+                      <p className="text-gray-700 mt-2">
+                        The same distinction exists per timestep. The Hart diagram
+                        colours each point by its <em>raw</em> threshold label, which is
+                        the correct thing to plot; the cyclone-level type comes from the
+                        guarded classification, which is the correct thing to count.
+                      </p>
+                    </div>
                     <p className="text-gray-500 text-sm">
                       Two caveats worth carrying: the subtropical count is
                       threshold-sensitive by a factor of 6–8 across the threshold

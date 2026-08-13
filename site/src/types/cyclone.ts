@@ -47,6 +47,9 @@ export interface TrackSummary {
   cps_label?: string;
   /** Coarse group used by the type filter (Extratropical, Subtropical, …). */
   cps_group?: string;
+  /** True only for an identified type (EC, SC, TC, ST, SD, TT, ET). False for
+   *  the `*_like` characteristic classes, which are descriptions, not claims. */
+  cps_identified?: boolean;
   /** Persistent-state sequence, e.g. "EC->SC". */
   cps_seq?: string;
   /**
@@ -290,12 +293,21 @@ export const EMPTY_FILTERS: FilterState = {
  * classifications are orthogonal and must not read as the same scale.
  */
 export const CPS_GROUP_COLORS: Record<string, string> = {
-  Extratropical: "#2563eb",
-  Subtropical:   "#c026d3",
-  Tropical:      "#dc2626",
-  Transition:    "#ea580c",
-  Undetermined:  "#9ca3af",
-  "No CPS data": "#d1d5db",
+  // Identified types — saturated.
+  Extratropical:             "#2563eb",
+  Subtropical:               "#c026d3",
+  Tropical:                  "#dc2626",
+  "Subtropical transition":  "#ea580c",
+  "Subtropical decay":       "#f59e0b",
+  "Tropical transition":     "#e11d48",
+  "Extratropical transition": "#0891b2",
+  // Not an identification: the structure was shown but never sustained for the
+  // 36 h gate, and none of the identification guards was applied. Deliberately
+  // grey so it never reads as a type — it used to be folded into Subtropical
+  // and Tropical, which put 548 unguarded cyclones under "Subtropical".
+  "Not sustained (<36 h)":   "#9ca3af",
+  Undetermined:              "#cbd5e1",
+  "No CPS data":             "#e5e7eb",
 };
 
 /** Colour per per-timestep CPS class, for the Hart diagram trajectory. */
