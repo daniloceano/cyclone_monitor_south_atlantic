@@ -4,21 +4,32 @@ Compute spatial intersections between cyclone tracks and sedimentary basins.
 
 For each track, this script determines which basins are traversed by:
 1. The cyclone center (at any timestep)
-2. The maximum wind position (at any timestep)
+2. The 10 m wind maximum position (at any timestep)
+3. The 100 m wind maximum position (at any timestep)
+
+Only these three primitive sets are stored. The unions the frontend filter
+needs - centre OR wind, 10 m OR 100 m - are computed there from these, so
+adding a wind level means one more array per track rather than a combinatorial
+explosion of precomputed unions.
+
+The wind position is taken at the quadrant carrying the timestep maximum, using
+the 'max' statistic. p99 is a detailed diagnostic and never drives the spatial
+filter.
 
 This pre-computation enables efficient spatial filtering in the web frontend
 without requiring runtime geometry operations.
 
 Input:
-    site/public/data/basins.geojson          - Basin polygons
-    site/public/data/summary.json            - Track summaries with coordinates
-    site/public/data/wind100/{year}.json     - Wind100 max positions
+    site/public/data/basins.geojson       - Basin polygons
+    site/public/data/summary.json         - Track summaries with coordinates
+    site/public/data/wind/{year}.json     - Per-quadrant wind extrema
+    site/public/data/details/{year}.json  - Cyclone centres (the wind JSON
+                                            stores offsets, not absolute
+                                            positions, so the centre is needed
+                                            to reconstruct them)
 
 Output:
     site/public/data/basin_intersections.json
-
-Author: Cyclone Monitor Team
-Date: 2026-04
 """
 
 import json
@@ -37,7 +48,12 @@ PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / "site" / "public" / "data"
 BASINS_PATH = DATA_DIR / "basins.geojson"
 SUMMARY_PATH = DATA_DIR / "summary.json"
-WIND100_DIR = DATA_DIR / "wind100"
+WIND_DIR = DATA_DIR / "wind"
+DETAILS_DIR = DATA_DIR / "details"
+
+# Prefixes of the wind levels in the JSON payload, and the key each maps to in
+# the output. Adding a level here is the only change needed.
+WIND_LEVELS = {"w10": "wind10", "w100": "wind100"}
 OUTPUT_PATH = DATA_DIR / "basin_intersections.json"
 
 
@@ -128,118 +144,133 @@ def load_summary_tracks() -> Tuple[List[dict], Dict[int, List[Tuple[float, float
     return tracks, track_centers
 
 
-def load_wind100_positions(years: List[int]) -> Dict[int, List[Tuple[float, float]]]:
+def load_wind_positions(years: List[int]) -> Dict[str, Dict[int, List[Tuple[float, float]]]]:
     """
-    Load wind100 maximum positions for all tracks.
-    
-    For each timestep, extracts the position of the global maximum wind
-    (using the 'gq' field to identify the quadrant with the maximum).
-    
+    Load the wind-maximum position at every timestep, for every level.
+
+    The wind JSON stores quadrant entries as OFFSETS from the cyclone centre,
+    so the centre is read from details/{year}.json and added back. The quadrant
+    carrying the timestep maximum is the argmax of the four values - the source
+    stores that as a label, but it is exactly reproducible, so the JSON omits it.
+
     Returns:
-        Dict mapping track_id -> [(lon, lat), ...] of max wind positions
+        {level_key: {track_id: [(lon, lat), ...]}}
     """
-    print("Loading wind100 data...")
-    wind_positions = defaultdict(list)
-    
+    print("Loading wind data...")
+    positions: Dict[str, Dict[int, List[Tuple[float, float]]]] = {
+        key: defaultdict(list) for key in WIND_LEVELS.values()
+    }
+
     years_processed = 0
-    tracks_with_wind = 0
-    
     for year in sorted(years):
-        wind_file = WIND100_DIR / f"{year}.json"
-        if not wind_file.exists():
+        wind_file = WIND_DIR / f"{year}.json"
+        details_file = DETAILS_DIR / f"{year}.json"
+        if not wind_file.exists() or not details_file.exists():
             continue
-        
-        with open(wind_file, 'r', encoding='utf-8') as f:
-            year_data = json.load(f)
-        
-        for track_id_str, timesteps in year_data['tracks'].items():
-            track_id = int(track_id_str)
-            
+
+        with open(wind_file, "r", encoding="utf-8") as f:
+            wind_year = json.load(f)
+        with open(details_file, "r", encoding="utf-8") as f:
+            details_year = json.load(f)
+
+        # Cyclone centre per (track, timestamp)
+        centres: Dict[str, Dict[str, Tuple[float, float]]] = {}
+        for tid, detail in details_year.get("tracks", {}).items():
+            centres[tid] = {
+                ts["date"]: (ts["lon"], ts["lat"])
+                for ts in detail.get("timesteps", [])
+            }
+
+        for tid, timesteps in wind_year.get("tracks", {}).items():
+            track_id = int(tid)
+            track_centres = centres.get(tid, {})
+
             for ts_date, ts_data in timesteps.items():
-                # Get the 'max' metric (absolute maximum wind)
-                max_data = ts_data.get('max')
-                if max_data is None:
+                centre = track_centres.get(ts_date)
+                if centre is None:
                     continue
-                
-                # Get the quadrant with the global maximum
-                gq = max_data.get('gq')
-                if gq is None:
-                    continue
-                
-                quad_data = max_data.get(gq)
-                if quad_data is None:
-                    continue
-                
-                # quad_data is [lon, lat, wind_speed, angular_distance]
-                lon, lat = quad_data[0], quad_data[1]
-                wind_positions[track_id].append((lon, lat))
-        
+                lon_c, lat_c = centre
+
+                for prefix, level_key in WIND_LEVELS.items():
+                    level_block = ts_data.get(prefix)
+                    if not level_block:
+                        continue
+                    entry = level_block.get("max")
+                    if not entry:
+                        continue
+
+                    # Quadrant with the timestep maximum
+                    best_q, best_v = None, None
+                    for quad in ("NW", "NE", "SW", "SE"):
+                        q = entry.get(quad)
+                        if not q or q[2] is None:
+                            continue
+                        if best_v is None or q[2] > best_v:
+                            best_q, best_v = q, q[2]
+                    if best_q is None:
+                        continue
+
+                    dlon, dlat = best_q[0], best_q[1]
+                    if dlon is None or dlat is None:
+                        continue
+                    positions[level_key][track_id].append((lon_c + dlon, lat_c + dlat))
+
         years_processed += 1
-    
-    tracks_with_wind = len(wind_positions)
-    print(f"  Processed {years_processed} years, {tracks_with_wind} tracks with wind100 data")
-    
-    return dict(wind_positions)
+
+    for level_key, per_track in positions.items():
+        print(f"  {level_key}: {len(per_track):,} tracks with wind positions")
+    print(f"  Processed {years_processed} years")
+
+    return {k: dict(v) for k, v in positions.items()}
 
 
 def compute_intersections(
     basins: Dict[str, dict],
     track_centers: Dict[int, List[Tuple[float, float]]],
-    wind_positions: Dict[int, List[Tuple[float, float]]],
+    wind_positions: Dict[str, Dict[int, List[Tuple[float, float]]]],
 ) -> Dict[int, dict]:
     """
     Compute basin intersections for all tracks.
-    
-    For each track, determines:
-    - center: basins intersected by cyclone center
-    - wind_max: basins intersected by maximum wind position
-    - any: union of both (center OR wind_max)
-    
+
+    Stores only the primitive sets - centre, and one per wind level. The
+    frontend derives every union it needs from these.
+
     Returns:
-        Dict mapping track_id -> {
-            'center': [basin_ids...],
-            'wind_max': [basin_ids...],
-            'any': [basin_ids...],
-        }
+        {track_id: {'center': [...], 'wind10': [...], 'wind100': [...]}}
     """
     print("Computing intersections...")
-    
+
     all_track_ids = set(track_centers.keys())
     total = len(all_track_ids)
-    
+
     intersections = {}
     tracks_with_basin = 0
-    
+
     for i, track_id in enumerate(sorted(all_track_ids)):
         if (i + 1) % 1000 == 0:
             print(f"  Progress: {i+1}/{total} tracks")
-        
-        # Find basins intersected by center positions
+
         center_basins: Set[str] = set()
-        centers = track_centers.get(track_id, [])
-        for lon, lat in centers:
-            for basin_id in point_in_any_basin(lon, lat, basins):
-                center_basins.add(basin_id)
-        
-        # Find basins intersected by wind max positions
-        wind_basins: Set[str] = set()
-        winds = wind_positions.get(track_id, [])
-        for lon, lat in winds:
-            for basin_id in point_in_any_basin(lon, lat, basins):
-                wind_basins.add(basin_id)
-        
-        # Combine
-        any_basins = center_basins | wind_basins
-        
-        # Only store if there's at least one intersection
-        if any_basins:
-            intersections[track_id] = {
-                'center': sorted(center_basins),
-                'wind_max': sorted(wind_basins),
-                'any': sorted(any_basins),
-            }
+        for lon, lat in track_centers.get(track_id, []):
+            center_basins.update(point_in_any_basin(lon, lat, basins))
+
+        per_level: Dict[str, Set[str]] = {}
+        for level_key in WIND_LEVELS.values():
+            found: Set[str] = set()
+            for lon, lat in wind_positions.get(level_key, {}).get(track_id, []):
+                found.update(point_in_any_basin(lon, lat, basins))
+            per_level[level_key] = found
+
+        union = center_basins.union(*per_level.values()) if per_level else center_basins
+
+        # Only store tracks that intersect something.
+        if union:
+            entry = {"center": sorted(center_basins)}
+            for level_key, found in per_level.items():
+                entry[level_key] = sorted(found)
+            intersections[track_id] = entry
             tracks_with_basin += 1
-    
+
     print(f"  Completed: {tracks_with_basin}/{total} tracks intersect at least one basin")
     return intersections
 
@@ -249,26 +280,39 @@ def compute_basin_statistics(
     basins: Dict[str, dict],
 ) -> Dict[str, dict]:
     """
-    Compute per-basin statistics.
-    
-    Returns:
-        Dict mapping basin_id -> {
-            'center_count': int,
-            'wind_max_count': int,
-            'any_count': int,
-        }
+    Per-basin track counts, one per mode + wind-height combination.
+
+    Keys mirror basinStatKey() in site/src/lib/filters.ts:
+        center, wind_max_10, wind_max_100, wind_max_any,
+        any_10, any_100, any_any
+
+    These are dataset-wide counts, shown next to each basin in the filter, not
+    counts within the currently applied filter.
     """
-    stats = {basin_id: {'center_count': 0, 'wind_max_count': 0, 'any_count': 0}
-             for basin_id in basins.keys()}
-    
-    for track_id, data in intersections.items():
-        for basin_id in data['center']:
-            stats[basin_id]['center_count'] += 1
-        for basin_id in data['wind_max']:
-            stats[basin_id]['wind_max_count'] += 1
-        for basin_id in data['any']:
-            stats[basin_id]['any_count'] += 1
-    
+    height_keys = {"10": "wind10", "100": "wind100"}
+
+    stat_keys = ["center"]
+    for h in ("10", "100", "any"):
+        stat_keys += [f"wind_max_{h}", f"any_{h}"]
+
+    stats = {bid: {k: 0 for k in stat_keys} for bid in basins}
+
+    for data in intersections.values():
+        center = set(data.get("center", []))
+        per_h = {
+            "10": set(data.get("wind10", [])),
+            "100": set(data.get("wind100", [])),
+        }
+        per_h["any"] = per_h["10"] | per_h["100"]
+
+        for bid in center:
+            stats[bid]["center"] += 1
+        for h, wind in per_h.items():
+            for bid in wind:
+                stats[bid][f"wind_max_{h}"] += 1
+            for bid in center | wind:
+                stats[bid][f"any_{h}"] += 1
+
     return stats
 
 
@@ -325,7 +369,7 @@ def main():
         
         # Get list of years from tracks
         years = sorted(set(t['year'] for t in tracks))
-        wind_positions = load_wind100_positions(years)
+        wind_positions = load_wind_positions(years)
         
         # Compute intersections
         intersections = compute_intersections(basins, track_centers, wind_positions)
@@ -335,17 +379,18 @@ def main():
         
         # Print summary
         print("\nBasin intersection statistics:")
-        print("-" * 60)
-        print(f"{'Basin':<30} {'Center':>8} {'Wind':>8} {'Any':>8}")
-        print("-" * 60)
+        print("-" * 78)
+        print(f"{'Basin':<26} {'Center':>8} {'W10':>8} {'W100':>8} "
+              f"{'Wind any':>9} {'Any':>8}")
+        print("-" * 78)
         for basin_id in sorted(basins.keys()):
-            stats = basin_stats[basin_id]
+            st = basin_stats[basin_id]
             name = basins[basin_id]['name']
-            # Truncate long names
-            if len(name) > 28:
-                name = name[:25] + "..."
-            print(f"{name:<30} {stats['center_count']:>8} {stats['wind_max_count']:>8} {stats['any_count']:>8}")
-        print("-" * 60)
+            if len(name) > 24:
+                name = name[:21] + "..."
+            print(f"{name:<26} {st['center']:>8} {st['wind_max_10']:>8} "
+                  f"{st['wind_max_100']:>8} {st['wind_max_any']:>9} {st['any_any']:>8}")
+        print("-" * 78)
         
         # Save output
         save_output(intersections, basin_stats, basins)

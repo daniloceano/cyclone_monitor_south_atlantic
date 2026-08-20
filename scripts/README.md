@@ -29,7 +29,7 @@ python3 scripts/data/run_pipeline.py
 python3 scripts/data/run_pipeline.py --skip-download
 ```
 
-**Output**: `data/processed/tracks_south_atlantic_consolidated.csv` (~143 MB)
+**Output**: `data/processed/tracks_south_atlantic_consolidated.csv` (372 MB)
 
 ### 2. Merge Wind100 Data (per-cyclone Parquet files)
 
@@ -59,7 +59,7 @@ python3 scripts/preprocess_data.py
 
 **Output**:
 - `site/public/data/summary.json` (~10 MB)
-- `site/public/data/details/{year}.json` (43 files, ~2 MB each)
+- `site/public/data/details/{year}.json` (43 files, ~6.5 MB each)
 
 ---
 
@@ -106,7 +106,7 @@ python3 scripts/preprocess_data.py
 - Mark interpolated vs original values with `lec_original` flag
 
 **Output**:
-- `data/processed/tracks_south_atlantic_consolidated.csv` (~143 MB)
+- `data/processed/tracks_south_atlantic_consolidated.csv` (372 MB)
 - `data/processed/tracks_south_atlantic_consolidated.txt` (validation report)
 
 ---
@@ -257,7 +257,7 @@ data/raw/tracks_SAt_source.csv (180 MB)
         │
         ↓  preprocess_data.py (scripts/data/)
         │
-data/processed/tracks_south_atlantic_consolidated.csv (143 MB)
+data/processed/tracks_south_atlantic_consolidated.csv (372 MB)
         │                              │
         ↓  preprocess_data.py          ↓  merge_wind100.py
            (scripts/)                     + data/raw/wind100/ (482 MB)
@@ -326,4 +326,4 @@ conda activate cyclone_monitor
 
 ## 📧 Questions?
 
-See main repository README or `docs/wind100-integration.md`.
+See main repository README or `docs/wind-integration.md`.

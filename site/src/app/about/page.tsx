@@ -1,13 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+import { loadSources } from "@/lib/dataLoader";
+import type { SourceEntry, SourcesRegistry } from "@/types/cyclone";
 
 export default function AboutPage() {
   const handleLogout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
   }, []);
+
+  // Provenance is rendered from data/metadata/sources.json rather than written
+  // out here, so a DOI cannot be corrected in the registry and stay wrong on
+  // this page.
+  const [sources, setSources] = useState<SourcesRegistry | null>(null);
+  useEffect(() => {
+    loadSources().then(setSources);
+  }, []);
+  const src = (key: string): SourceEntry | null =>
+    sources?.sources?.[key] ?? null;
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -27,9 +40,6 @@ export default function AboutPage() {
           </svg>
           <span className="text-sm font-semibold text-gray-900 truncate">
             South Atlantic Cyclone Monitor
-          </span>
-          <span className="hidden sm:block text-xs text-gray-400 flex-shrink-0">
-            1979–2020
           </span>
         </div>
 
@@ -69,80 +79,112 @@ export default function AboutPage() {
 
           {/* Data Sources */}
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-2">
               Data Sources
             </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Grouped by what they contribute. Each group names its origin and
+              what was done to it locally; the full citations are collected once
+              in the <a href="#references" className="text-blue-600 hover:underline">References</a>.
+            </p>
             <div className="space-y-6">
-              <DataSourceCard
-                title="Cyclone Track Database"
-                description="Extratropical cyclone tracks identified using a feature-tracking algorithm based on relative vorticity at 850 hPa. Derived from ERA5 reanalysis and CFSR/CFSv2 data covering 1979–2020."
-                citation="Gramcianinov, C. B., Campos, R. M., de Camargo, R., Hodges, K. I., Guedes Soares, C., & Peliz, Á. (2020). Atlantic extratropical cyclone tracks in 41 years of ERA5 and CFSR/CFSv2 databases. Mendeley Data, V4."
-                doi="10.17632/kwcvfr52hp.4"
-                doiUrl="https://doi.org/10.17632/kwcvfr52hp.4"
-                role="Primary source for track positions, timestamps, and vor42 intensity"
+              <DataSourceGroup
+                title="Cyclone tracking"
+                lead={
+                  <>
+                    Every cyclone shown here comes from one catalogue of
+                    Southwestern Atlantic tracks, distributed together with its
+                    energetics. Systems were identified by feature tracking of
+                    relative vorticity at 850&nbsp;hPa in ERA5, spectrally
+                    filtered to T42 — which is what the interface calls{" "}
+                    <em>central relative vorticity</em>. Positions are 1-hourly.
+                    Column names are standardised on ingest; no track is
+                    subsetted, resampled or reprojected.
+                  </>
+                }
+                entries={[
+                  { key: "tracks_lec", label: "Distributed dataset", entry: src("tracks_lec") },
+                  { key: "tracking_method", label: "Tracking dataset and method", entry: src("tracking_method") },
+                  { key: "genesis_regions", label: "Genesis regions", entry: src("genesis_regions") },
+                ]}
               />
 
-              <DataSourceCard
-                title="Full Tracking Catalogue (track-only cyclones)"
-                description="The complete, unfiltered TRACK output for the extratropical South Atlantic: 29,967 cyclones from ERA5, 1979–2019, with position and filtered vorticity only. It supplies the 24,044 'track only' systems shown here — the ones that never received energetics, lifecycle or phase-space processing."
-                citation="Gramcianinov, C. B., Campos, R. M., de Camargo, R., Hodges, K. I., Guedes Soares, C., & da Silva Dias, P. L. (2020). Atlantic extratropical cyclone tracks in 41 years of ERA5 and CFSR/CFSv2 databases (Version 4). Mendeley Data."
-                doi="10.17632/kwcvfr52hp.4"
-                doiUrl="https://doi.org/10.17632/kwcvfr52hp.4"
-                role="Track-only cyclones. NOTE: a different tracking vintage from the processed catalogue — see Data Coverage below"
+              <DataSourceGroup
+                title="Lorenz Energy Cycle"
+                lead={
+                  <>
+                    Semi-Lagrangian energetics computed in a box that follows
+                    each cyclone: the four reservoirs (A<sub>Z</sub>, A<sub>E</sub>,
+                    K<sub>Z</sub>, K<sub>E</sub>), the conversion, generation and
+                    boundary terms, and the residuals. They ship inside the same
+                    archive as the tracks, so the data and the method it
+                    implements are one origin, not two. Native resolution is
+                    3-hourly; values are linearly interpolated to 1-hourly within
+                    each track and every timestep carries a flag saying whether
+                    it was computed or interpolated.
+                  </>
+                }
+                entries={[
+                  { key: "tracks_lec", label: "Distributed dataset", entry: src("tracks_lec") },
+                  { key: "lec_method", label: "Method and climatology", entry: src("lec_method") },
+                ]}
               />
 
-              <DataSourceCard
-                title="Lorenz Energy Cycle (LEC) Diagnostics"
-                description="Semi-Lagrangian energetics computed for each cyclone following the system's center. Contains energy reservoirs (Az, Ae, Kz, Ke), conversion terms (Ca, Ck, Ce, Cz), boundary fluxes, and generation terms. LEC climatology for the region is documented in a dedicated study."
-                citation="De Souza, D. C., Silva Dias, P. L. D., Gramcianinov, C. B., & Camargo, R. (2025). Lorenz Energy Cycle Climatology for the Southwestern Atlantic Cyclones. Climate Dynamics, 63(11), 1–26."
-                doi="10.1007/s00382-024-07555-z"
-                doiUrl="https://doi.org/10.1007/s00382-024-07555-z"
-                role="LEC methodology and climatology reference"
+              <DataSourceGroup
+                title="Cyclone Phase Space"
+                lead={
+                  <>
+                    Thermal-structure diagnostics in the Hart (2003) framework —
+                    the thickness asymmetry <em>B</em> and the lower and upper
+                    thermal winds <em>V<sub>T</sub><sup>L</sup></em> and{" "}
+                    <em>V<sub>T</sub><sup>U</sup></em> — at two deliberately
+                    separate grains: a <strong>state at each timestep</strong> and
+                    a <strong>category for the cyclone as a whole</strong>.
+                    Parameters are 3-hourly and are joined to the hourly track by
+                    exact timestamp.
+                  </>
+                }
+                entries={[
+                  { key: "cyclone_phase_space", label: "Classification dataset", entry: src("cyclone_phase_space") },
+                ]}
               />
 
-              <DataSourceCard
-                title="LEC Data Archive"
-                description="Dataset containing the semi-Lagrangian LEC diagnostics for all 6,789 cyclones. Originally at 3-hourly resolution, interpolated to 1-hourly for this visualization."
-                citation="Couto de Souza, D. (2025). Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian LEC diagnostics (1979–2020). Zenodo."
-                doi="10.5281/zenodo.18133432"
-                doiUrl="https://doi.org/10.5281/zenodo.18133432"
-                role="All LEC energetics terms (interpolated from 3-hourly to 1-hourly)"
+              <DataSourceGroup
+                title="Wind diagnostics"
+                lead={
+                  <>
+                    Per-quadrant wind extrema at <strong>10&nbsp;m</strong> and{" "}
+                    <strong>100&nbsp;m</strong>. Two companion datasets by the
+                    same author, built with the same method: for every cyclone a
+                    20°×20° domain is centred on the core, and within a circular
+                    mask of 9.5° radius — after Gaussian smoothing (σ&nbsp;=&nbsp;0.25)
+                    — the absolute maximum and the 99th percentile are taken in
+                    each of the four quadrants, at every hour of the life cycle.
+                    Both statistics are shown in the track panel; only the maximum
+                    is used to rank a whole cyclone.
+                  </>
+                }
+                entries={[
+                  { key: "wind10", label: "10 m", entry: src("wind10") },
+                  { key: "wind100", label: "100 m", entry: src("wind100") },
+                ]}
               />
 
-              <DataSourceCard
-                title="Genesis Region Classification"
-                description="Cyclone genesis regions identified based on the location of cyclogenesis, following regional hotspot definitions for the South Atlantic."
-                citation="Gramcianinov, C. B., Hodges, K. I., & Camargo, R. (2019). The properties and genesis environments of South Atlantic cyclones. Climate Dynamics, 53(7), 4115–4140."
-                doi="10.1007/s00382-019-04778-7"
-                doiUrl="https://doi.org/10.1007/s00382-019-04778-7"
-                role="Classification: Argentina/Patagonia, SE South America, SE Brazil Coast"
-              />
-
-              <DataSourceCard
-                title="Lifecycle Phase Detection"
-                description="Objective determination of cyclone lifecycle phases (incipient, intensification, mature, decay) based on relative vorticity evolution using the Cyclophaser algorithm."
-                citation="de Souza, D. C., da Silva Dias, P. L., Gramcianinov, C. B., & de Camargo, R. (2025). Cyclophaser: A Python package for detecting extratropical cyclone life cycles. Journal of Open Source Software, 10(108), 7363."
-                doi="10.21105/joss.07363"
-                doiUrl="https://doi.org/10.21105/joss.07363"
-                role="Phase labels per timestep"
-              />
-
-              <DataSourceCard
-                title="100 m Wind Statistics (wind100)"
-                description="Maximum and 99th-percentile 100 m wind speed associated with each cyclone, derived from ERA5 in a Lagrangian (cyclone-centred) reference frame and reported separately for the four quadrants around the centre."
-                citation="Gramcianinov, C. B., & Couto de Souza, D. (2026). Maximum wind speeds and 99th percentile values at 100 meters associated with extratropical cyclones in the South Atlantic (1979–2020). Zenodo."
-                doi="10.5281/zenodo.19353037"
-                doiUrl="https://doi.org/10.5281/zenodo.19353037"
-                role="Quadrant wind extrema shown on the map and in the timestep panel; also drives the sedimentary-basin wind filter"
-              />
-
-              <DataSourceCard
-                title="Cyclone Phase Space Classification"
-                description="Thermal-structure diagnostics for every cyclone in the catalogue, following the Hart (2003) Cyclone Phase Space: the thickness asymmetry B and the lower/upper thermal winds VTL and VTU, plus a per-timestep and a per-cyclone structural classification."
-                citation="Rodriguez, A., & Couto de Souza, D. (in preparation). Cyclone Phase Space classification of Southwestern Atlantic cyclones (1979–2020). Computed within the paper_energy_patterns project, IAG-USP."
-                pending
-                pendingNote="The dataset is being prepared for deposit on Zenodo. Until then it is copied into data/raw/ by hand and is not reproducible from a public download — see the placeholder note in scripts/data/preprocess_data.py."
-                role="Cyclone type filter, the phase-space diagram in the track panel, and the per-timestep structural label"
+              <DataSourceGroup
+                title="Lifecycle phases and underlying reanalysis"
+                lead={
+                  <>
+                    Lifecycle phases are assigned objectively from the vorticity
+                    evolution of each track. Every dataset above is ultimately
+                    derived from the same reanalysis; the monitor never reads it
+                    directly.
+                  </>
+                }
+                entries={[
+                  { key: "lifecycle_phases", label: "Lifecycle phases", entry: src("lifecycle_phases") },
+                  { key: "era5", label: "Reanalysis", entry: src("era5") },
+                  { key: "sedimentary_basins", label: "Sedimentary basins", entry: src("sedimentary_basins") },
+                ]}
               />
             </div>
           </section>
@@ -170,7 +212,7 @@ export default function AboutPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-gray-700">
                     <tr>
-                      <td className="px-4 py-2">Track position &amp; vor42</td>
+                      <td className="px-4 py-2">Track position &amp; central relative vorticity</td>
                       <td className="px-4 py-2">6,789 (100 %)</td>
                       <td className="px-4 py-2">1-hourly</td>
                       <td className="px-4 py-2">as published</td>
@@ -189,9 +231,18 @@ export default function AboutPage() {
                     </tr>
                     <tr>
                       <td className="px-4 py-2">Cyclone Phase Space</td>
-                      <td className="px-4 py-2">6,761 (99.6 %)</td>
+                      <td className="px-4 py-2">6,776 (99.8 %)</td>
                       <td className="px-4 py-2">3-hourly</td>
-                      <td className="px-4 py-2">interpolated to 1-hourly, 87.3 % coverage</td>
+                      <td className="px-4 py-2">
+                        interpolated to 1-hourly, 87.3 % coverage; 6,761 carry at
+                        least one computed timestep
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-2">10 m wind (quadrants)</td>
+                      <td className="px-4 py-2">6,789 (100 %)</td>
+                      <td className="px-4 py-2">1-hourly</td>
+                      <td className="px-4 py-2">as published, no interpolation</td>
                     </tr>
                     <tr>
                       <td className="px-4 py-2">100 m wind (quadrants)</td>
@@ -215,59 +266,14 @@ export default function AboutPage() {
                   tracks_SAt_filtered_with_energetics
                 </code>
                 . The phase-space classification was then computed over that same
-                filtered set, which is why it never exceeds it. The 100 m wind
-                dataset, computed over a broader tracking catalogue, contains{" "}
+                filtered set, which is why it never exceeds it. The two wind
+                datasets, computed over a broader tracking catalogue, each contain{" "}
                 <strong>1,198 additional cyclones</strong> that are not shown here:
                 they have no position, vorticity, phase or energetics in this build,
                 so they cannot be rendered as tracks.
               </p>
             </div>
 
-            <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm">
-              <p className="font-medium text-gray-800 mb-1">
-                Processing levels
-              </p>
-              <p className="text-gray-600 leading-relaxed mb-3">
-                The interface distinguishes <strong>processed</strong> cyclones —
-                6,789 with the full diagnostic stack — from{" "}
-                <strong>track-only</strong> cyclones: 24,044 systems taken from the
-                full Gramcianinov tracking catalogue that carry position and
-                vorticity and nothing else. Track-only cyclones are loaded from a
-                separate file only when the processing filter asks for them, and
-                they cannot be filtered by genesis region or structural type,
-                because they have neither.
-              </p>
-              <div className="bg-amber-50 border border-amber-200 rounded p-3">
-                <p className="font-medium text-amber-900 mb-1">
-                  The two sets come from different tracking vintages
-                </p>
-                <p className="text-amber-800 leading-relaxed">
-                  This is the caveat to carry. The processed catalogue comes from a
-                  later TRACK run than the published Mendeley v4 archive, and the
-                  two <strong>do not share a track numbering</strong>: of the 4,072
-                  IDs present in both, <strong>none</strong> refer to the same
-                  storm. Cyclone 19810002, for instance, sits at 29.1°S in one and
-                  54.4°S in the other.
-                </p>
-                <p className="text-amber-800 leading-relaxed mt-2">
-                  Cyclones are therefore paired <strong>geometrically</strong>, on
-                  matching date and position — which works because positions agree
-                  to about 10⁻⁶ degrees when it is genuinely the same system. 5,923
-                  catalogue tracks were identified this way as already present and
-                  dropped, leaving 24,044 genuinely unprocessed ones. Their IDs are
-                  shifted by 100,000,000 so they cannot collide with the processed
-                  catalogue&apos;s; each track panel shows the original catalogue ID.
-                </p>
-                <p className="text-amber-800 leading-relaxed mt-2">
-                  Two consequences worth knowing: the deduplication is geometric and
-                  imperfect at the margin, so a system tracked with a slightly
-                  different centre between vintages may still appear twice; and the
-                  Mendeley archive ends <strong>2020-01-05</strong> while the
-                  processed catalogue runs to January 2021, so 2020 and 2021 carry
-                  almost no track-only cyclones.
-                </p>
-              </div>
-            </div>
           </section>
 
           {/* Preprocessing */}
@@ -289,7 +295,8 @@ export default function AboutPage() {
                 <h3 className="font-medium text-gray-900 mb-2">Temporal Resolution &amp; Interpolation</h3>
                 <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm space-y-2">
                   <p className="text-blue-800 leading-relaxed">
-                    <strong>Track data (lon, lat, vor42):</strong> 1-hourly resolution throughout.
+                    <strong>Track data (lon, lat, central relative vorticity):</strong>{" "}
+                    1-hourly resolution throughout.
                   </p>
                   <p className="text-blue-800 leading-relaxed">
                     <strong>LEC energetics (Az, Ae, Kz, Ke, Ca, Ce, Ck, Cz, BAz, BAe, BKz, BKe, Gz, Ge):</strong>{" "}
@@ -389,10 +396,15 @@ export default function AboutPage() {
                       sign inversion) and links them across time to form coherent tracks.
                     </p>
                     <p>
-                      The intensity metric <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">vor42</code> 
-                      represents <strong>filtered and normalized relative vorticity</strong>. The absolute value 
-                      is used to maintain positive values (×10⁻⁵ s⁻¹), providing a consistent intensity measure 
-                      across the Southern Hemisphere cyclone dataset.
+                      The interface calls this quantity{" "}
+                      <strong>central relative vorticity</strong>: relative
+                      vorticity at 850&nbsp;hPa, spectrally filtered to T42 — the
+                      truncation the tracking is performed at, and the origin of
+                      the internal column name{" "}
+                      <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">vor42</code>.
+                      It is stored as a magnitude, so values are positive
+                      (×10⁻⁵&nbsp;s⁻¹) for Southern-Hemisphere cyclones; the sign
+                      convention is not altered anywhere in the interface.
                     </p>
                   </>
                 }
@@ -427,7 +439,7 @@ export default function AboutPage() {
                     <ul className="list-disc list-inside space-y-1">
                       <li><strong>Incipient:</strong> Initial development, before the system reaches significant intensity</li>
                       <li><strong>Intensification:</strong> Rapid deepening phase with increasing vorticity</li>
-                      <li><strong>Mature:</strong> Peak intensity window (vor42 near maximum)</li>
+                      <li><strong>Mature:</strong> Peak intensity window (vorticity near maximum)</li>
                       <li><strong>Decay:</strong> Weakening phase after the mature stage</li>
                     </ul>
                     <p className="mt-3 text-gray-500 text-sm">
@@ -532,9 +544,11 @@ export default function AboutPage() {
                       warm core re-energises the system, so peak intensity follows the
                       structure, whereas a secluded warm core is the terminal stage of
                       a baroclinic life cycle and the peak has already passed. Of 804
-                      persistent hybrid runs, 271 survived; 395 were rejected for
-                      out-of-band genesis and 138 as warm seclusions. The interface
-                      exposes the rejected warm-seclusion systems as their own filter.
+                      persistent hybrid runs, 271 survived and the rest were
+                      rejected — most for out-of-band genesis, the remainder as
+                      warm seclusions. Counting cyclones rather than runs,{" "}
+                      <strong>147</strong> had at least one run rejected as a warm
+                      seclusion; the interface exposes those as their own filter.
                     </p>
                     <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm mb-3">
                       <p className="font-medium mb-1">
@@ -570,6 +584,63 @@ export default function AboutPage() {
                       its threshold set attached; and the two cyclones classified{" "}
                       <code className="bg-gray-100 px-1 rounded text-xs">TC</code> are{" "}
                       <strong>unverified candidates</strong>, not identifications.
+                    </p>
+                  </>
+                }
+              />
+
+              <MethodCard
+                title="Wind diagnostics (10 m and 100 m)"
+                content={
+                  <>
+                    <p className="mb-3">
+                      For every cyclone and every hour of its life cycle, a
+                      20°×20° domain is centred on the core. Within a circular
+                      mask of 9.5° radius — after Gaussian smoothing with
+                      σ&nbsp;=&nbsp;0.25 — two statistics are extracted{" "}
+                      <strong>separately in each of the four quadrants</strong>:
+                      the absolute maximum wind speed and the 99th percentile.
+                      The same procedure is applied at both heights, so the two
+                      levels are directly comparable.
+                    </p>
+                    <p className="mb-3">
+                      <strong>Maximum and 99th percentile answer different
+                      questions.</strong> The maximum is the single strongest grid
+                      point and is therefore sensitive to isolated artefacts of the
+                      reanalysis grid; the 99th percentile is more robust and better
+                      describes the broad strength of the wind field. Both are
+                      reported per quadrant in the track panel, and the MAX / P99
+                      toggle switches between them.
+                    </p>
+                    <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
+                      <p className="text-blue-900 font-medium mb-1">
+                        Ranking a whole cyclone uses the maximum only
+                      </p>
+                      <p className="text-blue-800 leading-relaxed">
+                        When wind is the display variable, a cyclone&apos;s intensity
+                        is the largest of the four quadrant maxima, taken over all
+                        of its timesteps. That mirrors exactly how the vorticity
+                        intensity is defined — the peak value along the track — so
+                        the three display variables rank cyclones on the same
+                        principle. The 99th percentile is never used for this: it is
+                        a description of a wind field at an instant, not a measure
+                        of how strong a system got.
+                      </p>
+                    </div>
+                    <p className="mb-3">
+                      <strong>Distances are Euclidean degrees.</strong> The
+                      distance from a quadrant extremum to the cyclone centre is
+                      the plain hypotenuse of the longitude and latitude offsets,
+                      not a great-circle distance. It is reported as published.
+                    </p>
+                    <p>
+                      <strong>Quadrant labels are corrected for display.</strong>{" "}
+                      The source files label quadrants with north and south
+                      inverted relative to geographic convention. The stored data
+                      keep the original labels so they remain a faithful copy of
+                      the archive; the correction is applied only where a label is
+                      shown, so the label on screen always matches the position of
+                      the marker on the map.
                     </p>
                   </>
                 }
@@ -682,18 +753,6 @@ export default function AboutPage() {
                 <li className="flex gap-2">
                   <span className="text-gray-400">•</span>
                   <span>
-                    <strong>Track-only cyclones are a different tracking vintage.</strong>{" "}
-                    They are deduplicated against the processed catalogue
-                    geometrically rather than by ID, which is imperfect at the
-                    margin: a system whose centre shifted between vintages may
-                    appear twice. They also stop at 2020-01-05, and carry no wind
-                    data — the 100 m wind dataset is keyed to the processed
-                    catalogue&apos;s numbering.
-                  </span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-gray-400">•</span>
-                  <span>
                     1,198 cyclones present in the 100 m wind dataset are still absent
                     from the map: they carry no centre position in any ingested
                     source. Their centres are in principle recoverable from the wind
@@ -705,11 +764,46 @@ export default function AboutPage() {
           </section>
 
           {/* References */}
-          <section>
+          <section id="references">
             <h2 className="text-xl font-semibold text-gray-900 border-b border-gray-200 pb-2 mb-4">
               References
             </h2>
             <div className="bg-white border border-gray-200 rounded-lg p-5 space-y-4 text-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                Datasets
+              </p>
+              <Reference
+                authors="Couto de Souza, D., & Gramcianinov, C. B."
+                year="2025"
+                title="Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian LEC diagnostics (1979–2020) [Data set]"
+                journal="Zenodo"
+                doi="10.5281/zenodo.18133432"
+              />
+              <Reference
+                authors="Gramcianinov, C. B., Campos, R. M., de Camargo, R., Hodges, K. I., Guedes Soares, C., & Peliz, Á."
+                year="2020"
+                title="Atlantic extratropical cyclone tracks in 41 years of ERA5 and CFSR/CFSv2 databases, V4 [Data set]"
+                journal="Mendeley Data"
+                doi="10.17632/kwcvfr52hp.4"
+              />
+              <Reference
+                authors="Paredes Quispe, J. A."
+                year="2026"
+                title="Maximum and 99th percentile wind speeds at 10 meters within a Lagrangian domain centered on extratropical cyclones in the South Atlantic (1979–2020) [Data set]"
+                journal="Zenodo"
+                doi="10.5281/zenodo.19378255"
+              />
+              <Reference
+                authors="Paredes Quispe, J. A."
+                year="2026"
+                title="Maximum wind speeds and 99th percentile values at 100 meters associated with extratropical cyclones in the South Atlantic (1979–2020) [Data set]"
+                journal="Zenodo"
+                doi="10.5281/zenodo.19353037"
+              />
+
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 pt-2">
+                Methods and background
+              </p>
               <Reference
                 authors="Couto de Souza, D., da Silva Dias, P. L., Gramcianinov, C. B., & de Camargo, R."
                 year="2024"
@@ -807,6 +901,15 @@ export default function AboutPage() {
                 pages="108111"
                 doi="10.1016/j.oceaneng.2020.108111"
               />
+              <Reference
+                authors="Hersbach, H., Bell, B., Berrisford, P., Hirahara, S., Horányi, A., Muñoz-Sabater, J., et al."
+                year="2020"
+                title="The ERA5 global reanalysis"
+                journal="Quarterly Journal of the Royal Meteorological Society"
+                volume="146(730)"
+                pages="1999–2049"
+                doi="10.1002/qj.3803"
+              />
             </div>
             <p className="text-xs text-gray-400 mt-3 leading-relaxed">
               The subtropical/tropical threshold set attributed here to Wood et al.
@@ -842,71 +945,106 @@ export default function AboutPage() {
 
 // ─── Components ────────────────────────────────────────────────────────────────
 
-function DataSourceCard({
+/**
+ * One thematic group of sources.
+ *
+ * Grouping is the point: several entries here share an origin (the tracks and
+ * the energetics ship in one archive; the two wind heights are companion
+ * releases by one author), and listing them as independent "sources" implied a
+ * provenance that does not exist. The lead paragraph says what the information
+ * is, where it comes from and what was done to it; the rows below carry the
+ * formal identifiers.
+ *
+ * Every row is rendered from the provenance registry, so the DOIs on this page
+ * cannot drift from the ones the pipeline records.
+ */
+function DataSourceGroup({
   title,
-  description,
-  citation,
-  doi,
-  doiUrl,
-  role,
-  pending = false,
-  pendingNote,
+  lead,
+  entries,
 }: {
   title: string;
-  description: string;
-  citation: string;
-  /** Omit when the dataset has no DOI yet — pass `pending` instead. */
-  doi?: string;
-  doiUrl?: string;
-  role: string;
-  /** True when the dataset is used here but not yet formally published. */
-  pending?: boolean;
-  pendingNote?: string;
+  lead: React.ReactNode;
+  entries: { key: string; label: string; entry: SourceEntry | null }[];
 }) {
+  const present = entries.filter((e) => e.entry !== null);
+  const anyPending = present.some((e) => e.entry?.pending);
+
   return (
     <div
       className={`bg-white border rounded-lg p-5 ${
-        pending ? "border-amber-300" : "border-gray-200"
+        anyPending ? "border-amber-300" : "border-gray-200"
       }`}
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <h3 className="font-semibold text-gray-900">{title}</h3>
-        {pending && (
+        {anyPending && (
           <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide
                            bg-amber-100 text-amber-800 border border-amber-300 rounded px-1.5 py-0.5">
-            Unpublished
+            Includes unpublished data
           </span>
         )}
       </div>
-      <p className="text-gray-600 text-sm mb-3">{description}</p>
-      <div className="text-sm space-y-2">
-        <p className="text-gray-500">
-          <span className="font-medium">Citation:</span>{" "}
-          <span className="italic">{citation}</span>
-        </p>
-        {doi && doiUrl ? (
-          <p>
-            <span className="font-medium text-gray-500">DOI:</span>{" "}
-            <a
-              href={doiUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline"
-            >
-              {doi}
-            </a>
-          </p>
-        ) : (
-          <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-            <span className="font-medium">DOI:</span> not minted yet.{" "}
-            {pendingNote ??
-              "This dataset is still being prepared for deposit; the identifier will be added here once published."}
-          </p>
-        )}
-        <p className="text-gray-500">
-          <span className="font-medium">Role in this tool:</span> {role}
-        </p>
-      </div>
+
+      <div className="text-gray-600 text-sm mb-4 leading-relaxed">{lead}</div>
+
+      {present.length === 0 ? (
+        <p className="text-sm text-gray-400 italic">Loading provenance…</p>
+      ) : (
+        <dl className="space-y-2.5 border-t border-gray-100 pt-3">
+          {present.map(({ key, label, entry }) => (
+            <div key={key} className="text-sm">
+              <dt className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                {label}
+              </dt>
+              <dd className="text-gray-700">
+                <span className="italic">{entry!.name}</span>
+                {entry!.authors && entry!.authors.length > 0 && (
+                  <span className="text-gray-500">
+                    {" "}— {entry!.authors.join("; ")}
+                    {entry!.year ? ` (${entry!.year})` : ""}
+                  </span>
+                )}
+                {entry!.doi ? (
+                  <>
+                    {" "}
+                    <a
+                      href={entry!.url ?? `https://doi.org/${entry!.doi}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline whitespace-nowrap"
+                    >
+                      {entry!.doi}
+                    </a>
+                  </>
+                ) : entry!.pending ? (
+                  /* Unpublished: flag it, because the data cannot be obtained
+                     from a public download and the result is not yet citable. */
+                  <span className="block mt-1 text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 text-xs">
+                    <span className="font-medium">No DOI yet.</span>{" "}
+                    {entry!.pending_note ??
+                      "Being prepared for deposit; the identifier will appear here once published."}
+                  </span>
+                ) : entry!.url ? (
+                  /* Published but not DOI-minted — e.g. an agency data portal.
+                     A link is the right identifier; the amber warning is not. */
+                  <>
+                    {" "}
+                    <a
+                      href={entry!.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline break-all"
+                    >
+                      {entry!.url.replace(/^https?:\/\//, "")}
+                    </a>
+                  </>
+                ) : null}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }

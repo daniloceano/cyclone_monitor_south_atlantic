@@ -28,12 +28,12 @@ cyclone_monitor_south_atlantic/
 
 ## Design principle: no raw CSV in the browser
 
-The source CSV is 66 MB / 631 009 rows. Loading it in the browser would cause
+The source CSV is 172 MB / 631,009 rows. Loading it in the browser would cause
 unacceptable initial load times and memory usage. A Python preprocessing script
 converts it into two categories of static JSON artefacts served from Vercel's CDN:
 
 ```
-CSV (66 MB)  →  summary.json (~10 MB)  +  details/{year}.json (~1.8 MB × 43)
+CSV (372 MB)  →  summary.json (~10 MB)  +  details/{year}.json (~6.5 MB × 43)
 ```
 
 The frontend never touches the raw CSV.
@@ -50,7 +50,7 @@ User applies filters
   → client-side array.filter() over summary.tracks[]  (no network request)
 
 User clicks a track
-  → fetch /data/details/{year}.json  (1.8 MB raw / ~500 KB gzip)
+  → fetch /data/details/{year}.json  (~6.5 MB raw / ~1.5 MB gzip)
   → find track by id in yearDetails.tracks
   → render CircleMarker for each timestep
   → show TrackDetailPanel with lifecycle info
@@ -130,7 +130,7 @@ state library — the component tree is shallow enough that prop drilling is cle
 |----------|-----------|
 | Canvas renderer for polylines | 6 789 simultaneous SVG paths causes noticeable jank; canvas handles them smoothly |
 | Coordinate downsampling (max 120 pts/track) | Reduces `summary.json` by ~40% with imperceptible visual loss at map zoom levels 3–7 |
-| Lazy year-file loading | The 43 year detail files (~1.8 MB each) are only fetched when a user clicks a track from that year |
+| Lazy year-file loading | The 43 year detail files (~6.5 MB each) are only fetched when a user clicks a track from that year |
 | Module-level JS cache for loaded files | `Map<year, YearDetails>` in `dataLoader.ts` avoids re-fetching when navigating between tracks in the same year |
 
 ## Visualization components

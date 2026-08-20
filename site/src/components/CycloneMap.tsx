@@ -13,9 +13,11 @@
  *   - Track coords from the JSON are stored as [lon, lat] (GeoJSON order).
  *   - Leaflet expects [lat, lon], so coords are flipped on use.
  *
- * Wind100 overlay (added 2026):
- *   - Shown when selectedTimestep !== null AND wind100TrackData / wind100Meta
- *     are provided.
+ * Wind overlay:
+ *   - Shown when selectedTimestep !== null AND windTrackData / windMeta are
+ *     provided. Only the height implied by the active display variable is
+ *     drawn — there is no combined view, so the geometry on screen always has
+ *     one unambiguous meaning: circles are 10 m, squares are 100 m.
  *   - While the overlay is active the track polyline is dimmed to near-
  *     invisibility; non-selected timestep markers are also faded.
  *   - The selected timestep gets a larger, bright marker.
@@ -23,9 +25,10 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * ## Intensity-Based Track Coloring (unselected state)
  *
- * When no cyclone is selected, track colors reflect intensity using `max_vor42`
- * (maximum filtered relative vorticity, ×10⁻⁵ s⁻¹) — the same metric used
- * throughout the application for intensity classification.
+ * When no cyclone is selected, track colours reflect the peak value of the
+ * ACTIVE display variable — central relative vorticity (×10⁻⁵ s⁻¹), 10 m wind,
+ * or 100 m wind (m s⁻¹). The intensity filter reads the same thresholds, so the
+ * colours on screen and the filter bounds always describe the same quantity.
  *
  * Color scheme:
  *   - **Gray**: Tracks below the 10th percentile (p10) — low-intensity cyclones
@@ -33,7 +36,7 @@
  *     cyclones appearing more red
  *
  * Percentile calculation:
- *   - Computed at the **cyclone level** (max_vor42 per track), not timestep
+ *   - Computed at the **cyclone level** (the track's peak), not per timestep
  *   - Thresholds are **global** across the entire dataset (6,789 tracks),
  *     not recalculated dynamically for filtered subsets
  *   - Pre-computed in `scripts/preprocess_data.py` and stored in `summary.json`
@@ -63,15 +66,19 @@ import {
   Timestep,
   PHASE_COLORS,
   QuantileThresholds,
-  Wind100TimestepEntry,
-  Wind100Meta,
-  Wind100Metric,
+  WindTimestepEntry,
+  WindMeta,
+  WindMetric,
+  WindLevelKey,
+  DisplayVariable,
+  DisplayVariableInfo,
   BasinCollection,
   BasinFeature,
 } from "@/types/cyclone";
 import { formatDatetime, formatLat, formatLon } from "@/lib/utils";
-import { getIntensityColor, INTENSITY_COLORS } from "@/lib/colors";
-import Wind100MapOverlay, { Wind100Legend } from "./Wind100MapOverlay";
+import { getIntensityColor, quantileRank, INTENSITY_COLORS } from "@/lib/colors";
+import WindMapOverlay, { WindLegend } from "./WindMapOverlay";
+import { markerShapeFor } from "@/lib/windQuadrants";
 
 // Fix Leaflet's default icon paths broken by webpack
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -86,14 +93,18 @@ interface CycloneMapProps {
   selectedTrack: TrackSummary | null;
   timesteps: Timestep[] | null;
   selectedTimestep: Timestep | null;
-  quantileThresholds: QuantileThresholds;
+  /** Active display variable and its descriptor (thresholds, label, unit). */
+  displayVariable: DisplayVariable;
+  displayInfo: DisplayVariableInfo | null;
   onTrackSelect: (track: TrackSummary) => void;
   onTimestepSelect: (ts: Timestep) => void;
   onClearSelection: () => void;
-  // Wind100 overlay — all optional; overlay is silently skipped when absent
-  wind100TrackData: Record<string, Wind100TimestepEntry> | null;
-  wind100Meta: Wind100Meta | null;
-  wind100Metric: Wind100Metric;
+  // Wind overlay — all optional; overlay is silently skipped when absent
+  windTrackData: Record<string, WindTimestepEntry> | null;
+  windMeta: WindMeta | null;
+  /** Height to draw, derived from displayVariable — never independent of it. */
+  windLevel: WindLevelKey;
+  windMetric: WindMetric;
   // Basin overlay — all optional
   basinCollection: BasinCollection | null;
   selectedBasins: string[];
@@ -120,27 +131,40 @@ export default function CycloneMap({
   selectedTrack,
   timesteps,
   selectedTimestep,
-  quantileThresholds,
+  displayVariable,
+  displayInfo,
   onTrackSelect,
   onTimestepSelect,
   onClearSelection,
-  wind100TrackData,
-  wind100Meta,
-  wind100Metric,
+  windTrackData,
+  windMeta,
+  windLevel,
+  windMetric,
   basinCollection,
   selectedBasins,
 }: CycloneMapProps) {
-  // Resolve wind100 data for the selected timestep (null-safe)
-  const w100Entry =
-    selectedTimestep && wind100TrackData
-      ? (wind100TrackData[selectedTimestep.date] ?? null)
+  const thresholds = displayInfo?.quantile_thresholds ?? null;
+  const decimals = displayInfo?.decimals ?? 3;
+
+  // Resolve the wind entry for the selected timestep, at the active height only.
+  const windEntry =
+    selectedTimestep && windTrackData
+      ? (windTrackData[selectedTimestep.date] ?? null)
       : null;
-  const metricData = w100Entry
-    ? wind100Metric === "max" ? w100Entry.max : w100Entry.p99
+  const levelEntry = windEntry?.[windLevel] ?? null;
+  const metricData = levelEntry
+    ? windMetric === "max" ? levelEntry.max : levelEntry.p99
     : null;
-  const globalMax = wind100Meta
-    ? wind100Metric === "max" ? wind100Meta.max_global_max : wind100Meta.p99_global_max
-    : 54; // dataset-computed absolute maximum as safe fallback
+
+  // Colour normalisation uses the active level's dataset-wide maximum, so the
+  // palette means the same thing at both heights but is not compressed by the
+  // stronger 100 m winds when 10 m is being shown.
+  const levelMeta = windMeta?.levels?.[windLevel === "w100" ? "wind100" : "wind10"] ?? null;
+  const globalMax = levelMeta
+    ? windMetric === "max" ? levelMeta.max_global_max : levelMeta.p99_global_max
+    : 54; // safe fallback
+
+  const markerShape = markerShapeFor(displayVariable);
 
   // Dim the polyline further when a specific timestep is focused
   const selectedTrackStyle = selectedTimestep ? STYLE_SELECTED_DIM : STYLE_SELECTED;
@@ -193,6 +217,7 @@ export default function CycloneMap({
               isSelected={true}
               onSelect={onTrackSelect}
               pane="tracks"
+              info={displayInfo}
             />
           ) : (
             // All tracks mode - each track gets a stable key
@@ -200,7 +225,10 @@ export default function CycloneMap({
               const positions = track.coords.map(
                 ([lon, lat]) => [lat, lon] as [number, number]
               );
-              const intensityColor = getIntensityColor(track.max_vor42, quantileThresholds);
+              const trackPeak = displayInfo ? track[displayInfo.field] : undefined;
+              const intensityColor = thresholds
+                ? getIntensityColor(trackPeak, thresholds)
+                : INTENSITY_COLORS.gray;
               const style = { color: intensityColor, weight: effectiveWeight, opacity: DEFAULT_OPACITY };
 
               return (
@@ -212,6 +240,7 @@ export default function CycloneMap({
                   isSelected={false}
                   onSelect={onTrackSelect}
                   pane="tracks"
+                  info={displayInfo}
                 />
               );
             })
@@ -219,7 +248,7 @@ export default function CycloneMap({
         </Pane>
 
         {/* ── Persistent panes — always in the DOM, never block clicks ───────── */}
-        <Pane name="wind100-markers" style={{ zIndex: 700 }} />
+        <Pane name="wind-markers" style={{ zIndex: 700 }} />
 
         {/* ── Timestep markers (only for selected track) ──────────────────── */}
         {/* Wrapped in a Pane to ensure markers render above the track polyline */}
@@ -260,7 +289,7 @@ export default function CycloneMap({
                         <div className="font-semibold">{formatDatetime(ts.date)}</div>
                         <div>{formatLat(ts.lat)}, {formatLon(ts.lon)}</div>
                         <div className="capitalize" style={{ color }}>
-                          {ts.phase} · vor42 = {ts.vor42.toFixed(3)}
+                          {ts.phase} · ζ = {ts.vor42.toFixed(3)}
                         </div>
                         <div className="text-gray-500 text-[10px]">Click to select</div>
                       </div>
@@ -295,7 +324,7 @@ export default function CycloneMap({
                         <div className="font-semibold">{formatDatetime(ts.date)}</div>
                         <div>{formatLat(ts.lat)}, {formatLon(ts.lon)}</div>
                         <div className="capitalize" style={{ color }}>
-                          {ts.phase} · vor42 = {ts.vor42.toFixed(3)}
+                          {ts.phase} · ζ = {ts.vor42.toFixed(3)}
                         </div>
                       </div>
                     </Tooltip>
@@ -336,43 +365,66 @@ export default function CycloneMap({
             })}
         </Pane>
 
-        {/* ── Wind100 overlay (only when a timestep is selected) ───────────── */}
+        {/* ── Wind overlay (only when a timestep is selected) ──────────────── */}
         {selectedTimestep && (
-          <Wind100MapOverlay
+          <WindMapOverlay
             cycloneLat={selectedTimestep.lat}
             cycloneLon={selectedTimestep.lon}
             date={selectedTimestep.date}
             data={metricData}
-            metric={wind100Metric}
+            metric={windMetric}
+            shape={markerShape}
+            levelLabel={levelMeta?.label ?? (windLevel === "w100" ? "Wind 100 m" : "Wind 10 m")}
             globalMax={globalMax}
           />
         )}
 
         {/* ── Intensity legend (only when no track selected) ─────────────── */}
-        {!selectedTrack && <IntensityLegend thresholds={quantileThresholds} />}
+        {!selectedTrack && thresholds && displayInfo && (
+          <IntensityLegend thresholds={thresholds} info={displayInfo} />
+        )}
 
         {/* ── Map event handler (click on ocean clears selection) ─────────── */}
         <MapClickHandler onClear={onClearSelection} hasSelection={selectedTrack !== null} />
       </MapContainer>
 
-      {/* ── Wind100 legend (sits over the map, outside MapContainer) ───────── */}
-      {selectedTimestep && wind100Meta && (
-        <Wind100Legend globalMax={globalMax} metric={wind100Metric} />
+      {/* ── Wind legend (sits over the map, outside MapContainer) ──────────── */}
+      {selectedTimestep && windMeta && (
+        <WindLegend
+          globalMax={globalMax}
+          metric={windMetric}
+          shape={markerShape}
+          levelLabel={levelMeta?.label ?? (windLevel === "w100" ? "Wind 100 m" : "Wind 10 m")}
+        />
       )}
     </div>
   );
 }
 
 // ── Intensity Legend ──────────────────────────────────────────────────────────
-function IntensityLegend({ thresholds }: { thresholds: QuantileThresholds }) {
+/**
+ * Colour-ramp legend for the active display variable.
+ *
+ * Labels and units come from the variable's own descriptor, so the legend can
+ * never claim a unit the colours do not represent.
+ */
+function IntensityLegend({
+  thresholds,
+  info,
+}: {
+  thresholds: QuantileThresholds;
+  info: DisplayVariableInfo;
+}) {
+  // Vorticity reads naturally at 1 dp here; winds at 0 dp keep the ends short.
+  const nd = info.field === "max_vor42" ? 1 : 0;
   return (
     <div className="leaflet-bottom leaflet-right">
       <div className="leaflet-control bg-white/95 backdrop-blur-sm rounded-lg shadow-md p-3 mr-3 mb-3">
         <div className="text-xs font-semibold text-gray-700 mb-2">
-          Intensity (max vor42)
+          Peak {info.label.toLowerCase()}
         </div>
         <div className="flex items-center gap-1">
-          {/* Gray for below p10 */}
+          {/* Gray: below p10, or no value for this variable */}
           <div className="flex flex-col items-center">
             <div
               className="w-4 h-3 rounded-sm border border-gray-300"
@@ -389,14 +441,12 @@ function IntensityLegend({ thresholds }: { thresholds: QuantileThresholds }) {
               }}
             />
             <div className="flex justify-between w-20 text-[10px] text-gray-500 mt-0.5">
-              <span>{thresholds.p10.toFixed(1)}</span>
-              <span>{thresholds.max.toFixed(1)}</span>
+              <span>{thresholds.p10.toFixed(nd)}</span>
+              <span>{thresholds.max.toFixed(nd)}</span>
             </div>
           </div>
         </div>
-        <div className="text-[9px] text-gray-400 mt-1.5">
-          ×10⁻⁵ s⁻¹ (vorticity)
-        </div>
+        <div className="text-[9px] text-gray-400 mt-1.5">{info.unit}</div>
       </div>
     </div>
   );
@@ -410,6 +460,8 @@ interface TrackPolylineProps {
   isSelected: boolean;
   onSelect: (t: TrackSummary) => void;
   pane: string;
+  /** Active display variable, so the tooltip reports the quantity on screen. */
+  info: DisplayVariableInfo | null;
 }
 
 function TrackPolyline({
@@ -419,7 +471,18 @@ function TrackPolyline({
   isSelected,
   onSelect,
   pane,
+  info,
 }: TrackPolylineProps) {
+  // Tooltip reports the ACTIVE variable, and derives the rank from the same
+  // thresholds that produced the colour — so the number, the word and the
+  // colour on screen can never describe different things.
+  const label = info ? info.label.toLowerCase() : "intensity";
+  const peak = info ? track[info.field] : undefined;
+  const peakText =
+    peak === undefined || peak === null
+      ? "no data"
+      : `${peak.toFixed(info?.decimals ?? 2)} ${info?.unit ?? ""}`.trim();
+  const rank = info ? quantileRank(peak, info.quantile_thresholds) : null;
   const polylineRef = useRef<L.Polyline | null>(null);
 
   const handleClick = useCallback(
@@ -465,7 +528,10 @@ function TrackPolyline({
             <div>
               {track.start.slice(0, 10)} → {track.end.slice(0, 10)}
             </div>
-            <div>Max vor42: {track.max_vor42.toFixed(3)} · {track.quantile}</div>
+            <div>
+              Peak {label}: {peakText}
+              {rank ? ` · ${rank}` : ""}
+            </div>
           </div>
         </Tooltip>
       )}

@@ -1,23 +1,31 @@
 "use client";
 
 /**
- * IntensityFilter — select cyclones by peak intensity (max_vor42).
+ * IntensityFilter — select cyclones by peak value of the ACTIVE display
+ * variable: central relative vorticity, 10 m wind, or 100 m wind.
  *
- * Shows the dataset-wide distribution of track-level max_vor42 as a filled
- * density curve, with the current selection highlighted and dataset quantiles
- * drawn as vertical guide lines. The selection can be set three ways, all
- * writing to the same state:
+ * Shows the dataset-wide distribution of that variable's track-level peaks as
+ * a filled density curve, with the current selection highlighted and the
+ * variable's own quantiles drawn as guide lines. The selection can be set three
+ * ways, all writing to the same state:
  *
  *   1. dragging either handle on the curve
  *   2. clicking anywhere on the curve (moves the nearest handle)
  *   3. typing the bounds into the numeric inputs
  *
  * Two modes:
- *   - "range"  : keep p_min <= max_vor42 <= p_max      (two handles)
- *   - "cutoff" : keep max_vor42 >= p_min               (one handle)
+ *   - "range"  : keep p_min <= value <= p_max      (two handles)
+ *   - "cutoff" : keep value >= p_min               (one handle)
+ *
+ * Nothing here is specific to any one variable: the curve, the guide lines and
+ * the shortcut chips are all read from the descriptor the caller passes, which
+ * is the same object the map colours tracks with. Switching variable therefore
+ * reshapes the whole control, and the bounds are cleared by the caller because
+ * a threshold in ×10⁻⁵ s⁻¹ means nothing in m s⁻¹.
  *
  * The curve is drawn from the pre-computed histogram in summary.json
- * (`intensity_pdf`), so no client-side binning happens. The y-axis is a
+ * (`display_variables[v].intensity_pdf`), so no client-side binning happens.
+ * The y-axis is a
  * probability density; its absolute scale is not shown because only the shape
  * matters for choosing a threshold.
  *
@@ -27,7 +35,11 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { IntensityFilterState, IntensityPDF } from "@/types/cyclone";
+import {
+  DisplayVariableInfo,
+  IntensityFilterState,
+  IntensityPDF,
+} from "@/types/cyclone";
 
 // ─── Geometry (SVG user units; the element itself scales to its container) ────
 const W = 300;
@@ -51,6 +63,8 @@ const GUIDES: { key: keyof IntensityPDF["quantiles"]; label: string }[] = [
 
 interface IntensityFilterProps {
   pdf: IntensityPDF;
+  /** Active display variable, supplying the label, unit and precision. */
+  info: DisplayVariableInfo;
   value: IntensityFilterState;
   onChange: (v: IntensityFilterState) => void;
   /** Number of tracks currently passing the whole filter stack. */
@@ -59,6 +73,7 @@ interface IntensityFilterProps {
 
 export default function IntensityFilter({
   pdf,
+  info,
   value,
   onChange,
   matchCount,
@@ -340,7 +355,9 @@ export default function IntensityFilter({
             }
             className="px-1.5 py-0.5 text-[9px] rounded border border-gray-200
                        text-gray-600 hover:bg-blue-50 hover:border-blue-300 transition"
-            title={`Keep cyclones above the ${q} threshold (${pdf.quantiles[q]?.toFixed(2)})`}
+            title={`Keep cyclones above the ${q} threshold (${pdf.quantiles[q]?.toFixed(
+              info.decimals
+            )} ${info.unit})`}
           >
             ≥ {q}
           </button>
@@ -348,7 +365,8 @@ export default function IntensityFilter({
       </div>
 
       <p className="text-[9px] text-gray-400 leading-tight">
-        Peak vor42 (×10⁻⁵ s⁻¹) per cyclone, {pdf.n.toLocaleString()} tracks.{" "}
+        Peak {info.label.toLowerCase()} ({info.unit}) per cyclone,{" "}
+        {pdf.n.toLocaleString()} tracks.{" "}
         <span className="text-gray-500 font-medium">
           {matchCount.toLocaleString()} match
         </span>{" "}

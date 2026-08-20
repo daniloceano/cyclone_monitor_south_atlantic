@@ -4,24 +4,35 @@ import { useState } from "react";
 import {
   TrackSummary,
   Timestep,
-  QuantileThresholds,
   PHASE_COLORS,
   PHASE_LABELS,
-  Wind100TimestepEntry,
-  Wind100Meta,
-  Wind100Metric,
-  Wind100QArray,
+  DisplayVariable,
+  DisplayVariableInfo,
+  WindTimestepEntry,
+  WindMeta,
+  WindMetric,
+  WindLevelKey,
+  WindQArray,
 } from "@/types/cyclone";
 import {
   formatDatetime,
   formatLat,
   formatLon,
-  formatVor42,
+  formatVorticity,
+  formatDisplayValue,
   formatDuration,
   monthName,
   getWindColor,
   STORM_ALERT_PALETTE,
 } from "@/lib/utils";
+import { quantileRank } from "@/lib/colors";
+import {
+  GRID_KEYS,
+  QUADRANT_DISPLAY,
+  QUADRANT_KEYS,
+  globalQuadrant,
+  quadrantDistance,
+} from "@/lib/windQuadrants";
 import dynamic from "next/dynamic";
 
 // Dynamic imports for chart components (client-side only, no SSR)
@@ -38,34 +49,17 @@ interface TrackDetailPanelProps {
   onClear: () => void;
   loading: boolean;
   error: string | null;
-  quantileThresholds: QuantileThresholds;
-  // Wind100 data for this track (keyed by ISO timestamp)
-  wind100TrackData: Record<string, Wind100TimestepEntry> | null;
-  wind100Meta: Wind100Meta | null;
-  wind100Metric: Wind100Metric;
-  onWind100MetricChange: (m: Wind100Metric) => void;
+  /** Active display variable and its descriptor. */
+  displayVariable: DisplayVariable;
+  displayInfo: DisplayVariableInfo | null;
+  // Wind data for this track (keyed by ISO timestamp), all heights
+  windTrackData: Record<string, WindTimestepEntry> | null;
+  windMeta: WindMeta | null;
+  /** Height to report, derived from displayVariable — never independent. */
+  windLevel: WindLevelKey;
+  windMetric: WindMetric;
+  onWindMetricChange: (m: WindMetric) => void;
 }
-
-const QUADRANT_KEYS = ["NW", "NE", "SW", "SE"] as const;
-
-/**
- * N/S labels are inverted in the source dataset relative to geographic
- * convention (verified against raw CSV coordinates).  E/W is correct.
- * Use this mapping wherever a quadrant label is shown to the user.
- */
-const QUADRANT_DISPLAY: Record<string, string> = {
-  NW: "SW", NE: "SE", SW: "NW", SE: "NE",
-};
-
-/**
- * Grid iteration order for the 2×2 quadrant panel, arranged so that the
- * displayed geographic labels read correctly (NW top-left … SE bottom-right).
- *   dataset SW → display NW (top-left)
- *   dataset SE → display NE (top-right)
- *   dataset NW → display SW (bottom-left)
- *   dataset NE → display SE (bottom-right)
- */
-const GRID_KEYS = ["SW", "SE", "NW", "NE"] as const;
 
 export default function TrackDetailPanel({
   track,
@@ -75,11 +69,13 @@ export default function TrackDetailPanel({
   onClear,
   loading,
   error,
-  quantileThresholds: _qt,
-  wind100TrackData,
-  wind100Meta,
-  wind100Metric,
-  onWind100MetricChange,
+  displayVariable,
+  displayInfo,
+  windTrackData,
+  windMeta,
+  windLevel,
+  windMetric,
+  onWindMetricChange,
 }: TrackDetailPanelProps) {
   const trackIdStr = String(track.id);
   const [showLECCharts, setShowLECCharts] = useState(false);
@@ -92,11 +88,18 @@ export default function TrackDetailPanel({
   const cpsCount = timesteps?.filter((t) => t.cps_B !== undefined).length ?? 0;
   const cpsOriginalCount = timesteps?.filter((t) => t.cps_original === true).length ?? 0;
 
-  // Resolve wind100 entry for the selected timestep
-  const w100Entry =
-    selectedTimestep && wind100TrackData
-      ? (wind100TrackData[selectedTimestep.date] ?? null)
+  // Wind at the ACTIVE height only. Every wind number in this panel comes from
+  // here, so the panel can never show a height other than the one the display
+  // selector names.
+  const levelKey = windLevel === "w100" ? "wind100" : "wind10";
+  const levelMeta = windMeta?.levels?.[levelKey] ?? null;
+  const levelLabel = levelMeta?.label ?? (windLevel === "w100" ? "Wind 100 m" : "Wind 10 m");
+
+  const windEntryAll =
+    selectedTimestep && windTrackData
+      ? (windTrackData[selectedTimestep.date] ?? null)
       : null;
+  const w100Entry = windEntryAll?.[windLevel] ?? null;
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden border-t border-gray-200">
@@ -146,34 +149,51 @@ export default function TrackDetailPanel({
               Shapiro–Keyser warm seclusion rather than counted as subtropical.
             </p>
           )}
-          {track.processed === false && (
-            <>
-              {track.src !== undefined && (
-                <InfoRow label="Catalogue ID" value={String(track.src)} />
-              )}
-              <p className="text-[10px] text-gray-600 bg-gray-100 border border-gray-200 rounded px-1.5 py-1 leading-tight">
-                <strong>Track-only cyclone.</strong> Position and vorticity from
-                the raw tracking catalogue — no energetics, lifecycle phases,
-                genesis region, phase space or 100 m wind. It also comes from a
-                different tracking vintage than the processed cyclones, so its
-                trajectory is not directly comparable with theirs. The ID shown
-                in the header is namespaced; the catalogue&apos;s own ID is above.
-              </p>
-            </>
-          )}
         </div>
 
         {/* ── Intensity ─────────────────────────────────────────────────── */}
+        {/* Every variable is listed, with the active one marked, so the panel
+            answers "how intense is this cyclone?" without forcing the user to
+            flip the display selector to find out. The rank is computed from the
+            active variable's thresholds — the same ones that colour the map. */}
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 space-y-1.5">
-          <p className="text-xs font-semibold text-gray-700 mb-1">Intensity (vor42)</p>
-          <InfoRow label="Peak intensity" value={formatVor42(track.max_vor42)} />
+          <p className="text-xs font-semibold text-gray-700 mb-1">Peak intensity</p>
+
           <InfoRow
-            label="Intensity rank"
-            value={track.quantile}
-            highlight={track.quantile === "top 5%" || track.quantile === "top 10%"}
+            label="Central relative vorticity"
+            value={formatVorticity(track.max_vor42)}
+            highlight={displayVariable === "vor42"}
           />
+          <InfoRow
+            label="Wind 10 m"
+            value={formatDisplayValue(track.max_wind10, { unit: "m s⁻¹", decimals: 2 })}
+            highlight={displayVariable === "wind10"}
+          />
+          <InfoRow
+            label="Wind 100 m"
+            value={formatDisplayValue(track.max_wind100, { unit: "m s⁻¹", decimals: 2 })}
+            highlight={displayVariable === "wind100"}
+          />
+
+          {displayInfo && (
+            <InfoRow
+              label={`Rank (${displayInfo.short_label.toLowerCase()})`}
+              value={
+                quantileRank(track[displayInfo.field], displayInfo.quantile_thresholds) ??
+                "—"
+              }
+              highlight={
+                quantileRank(track[displayInfo.field], displayInfo.quantile_thresholds) ===
+                  "top 5%" ||
+                quantileRank(track[displayInfo.field], displayInfo.quantile_thresholds) ===
+                  "top 10%"
+              }
+            />
+          )}
+
           <p className="text-xs text-gray-400 mt-1 leading-tight">
-            vor42 = filtered and normalized relative vorticity. Ranked against all 6 789 tracks.
+            Wind values are the largest quadrant maximum over the life cycle.
+            Ranked against all {(displayInfo?.n ?? 0).toLocaleString()} cyclones.
           </p>
         </div>
 
@@ -231,14 +251,18 @@ export default function TrackDetailPanel({
           />
         )}
 
-        {/* ── Wind100 Section ────────────────────────────────────────────── */}
-        {timesteps && !loading && wind100Meta && (
-          <Wind100Section
+        {/* ── Wind section ───────────────────────────────────────────────── */}
+        {timesteps && !loading && levelMeta && (
+          <WindSection
             selectedTimestep={selectedTimestep}
-            w100Entry={w100Entry}
-            wind100Meta={wind100Meta}
-            wind100Metric={wind100Metric}
-            onMetricChange={onWind100MetricChange}
+            entry={w100Entry}
+            levelLabel={levelLabel}
+            shape={windLevel === "w100" ? "square" : "circle"}
+            globalMaxForMetric={(m) =>
+              m === "max" ? levelMeta.max_global_max : levelMeta.p99_global_max
+            }
+            metric={windMetric}
+            onMetricChange={onWindMetricChange}
           />
         )}
 
@@ -343,7 +367,14 @@ export default function TrackDetailPanel({
         )}
 
         {/* ── Selected timestep detail ──────────────────────────────────── */}
-        {selectedTimestep && <TimestepDetail ts={selectedTimestep} w100Entry={w100Entry} wind100Metric={wind100Metric} />}
+        {selectedTimestep && (
+          <TimestepDetail
+            ts={selectedTimestep}
+            entry={w100Entry}
+            levelLabel={levelLabel}
+            metric={windMetric}
+          />
+        )}
       </div>
     </div>
   );
@@ -489,7 +520,7 @@ function TimestepNavigator({ timesteps, selectedTimestep, onSelect, lecCount }: 
           <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-gray-600">
             <span>Lat: {formatLat(selectedTimestep.lat)}</span>
             <span>Lon: {formatLon(selectedTimestep.lon)}</span>
-            <span>vor42: {selectedTimestep.vor42.toFixed(2)}</span>
+            <span>ζ: {selectedTimestep.vor42.toFixed(2)}</span>
             {selectedTimestep.Kz !== undefined && (
               <span className="text-blue-600">LEC data available</span>
             )}
@@ -516,36 +547,62 @@ function TimestepNavigator({ timesteps, selectedTimestep, onSelect, lecCount }: 
   );
 }
 
-// ── Wind100 section ────────────────────────────────────────────────────────────
+// ── Wind section ────────────────────────────────────────────────────────────
 
-interface Wind100SectionProps {
+/**
+ * Per-quadrant wind statistics for the selected timestep.
+ *
+ * Reports BOTH max and p99 — the MAX/P99 toggle switches which is shown, and
+ * both remain available. That the intensity filter uses only `max` is a
+ * separate decision about classifying a whole track; it is no reason to hide
+ * the percentile here, where the question is what the wind field looked like.
+ *
+ * The height is not selectable in this panel: it follows the display variable,
+ * so the heading and the numbers cannot disagree.
+ */
+interface WindSectionProps {
   selectedTimestep: Timestep | null;
-  w100Entry: Wind100TimestepEntry | null;
-  wind100Meta: Wind100Meta;
-  wind100Metric: Wind100Metric;
-  onMetricChange: (m: Wind100Metric) => void;
+  entry: WindLevelEntryOrNull;
+  levelLabel: string;
+  /** Marker geometry for this height, echoed in the header. */
+  shape: "circle" | "square";
+  globalMaxForMetric: (m: WindMetric) => number;
+  metric: WindMetric;
+  onMetricChange: (m: WindMetric) => void;
 }
 
-function Wind100Section({
+type WindLevelEntryOrNull = { max: WindMetricEntryT | null; p99: WindMetricEntryT | null } | null;
+type WindMetricEntryT = NonNullable<
+  NonNullable<WindTimestepEntry["w10"]>["max"]
+>;
+
+function WindSection({
   selectedTimestep,
-  w100Entry,
-  wind100Meta,
-  wind100Metric,
+  entry,
+  levelLabel,
+  shape,
+  globalMaxForMetric,
+  metric,
   onMetricChange,
-}: Wind100SectionProps) {
-  const metricData = w100Entry
-    ? wind100Metric === "max" ? w100Entry.max : w100Entry.p99
-    : null;
-  const globalMax = wind100Metric === "max"
-    ? wind100Meta.max_global_max
-    : wind100Meta.p99_global_max;
+}: WindSectionProps) {
+  const metricData = entry ? (metric === "max" ? entry.max : entry.p99) : null;
+  const globalMax = globalMaxForMetric(metric);
+  // Recomputed from the values; the source stores it as a label, and the two
+  // agree exactly (verified over 74,242 timestep-metric comparisons).
+  const gq = globalQuadrant(metricData);
 
   return (
     <div className="bg-emerald-50 border border-emerald-200 rounded-lg overflow-hidden">
       {/* Header row */}
       <div className="flex items-center justify-between px-3 py-2 bg-emerald-50 border-b border-emerald-100">
-        <span className="text-xs font-semibold text-emerald-800">
-          🌬️ Wind 100 m
+        <span className="text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
+          🌬️ {levelLabel}
+          {/* The marker geometry used for this height on the map */}
+          <span
+            className="inline-block border border-emerald-400 bg-emerald-200"
+            style={{ width: 8, height: 8, borderRadius: shape === "circle" ? "50%" : 2 }}
+            title={`Shown on the map as ${shape === "circle" ? "circles" : "squares"}`}
+          />
         </span>
 
         {/* Metric toggle */}
@@ -553,7 +610,7 @@ function Wind100Section({
           <button
             onClick={() => onMetricChange("max")}
             className={`px-2 py-0.5 text-[10px] font-semibold rounded transition ${
-              wind100Metric === "max"
+              metric === "max"
                 ? "bg-emerald-600 text-white"
                 : "text-emerald-700 hover:bg-emerald-50"
             }`}
@@ -563,7 +620,7 @@ function Wind100Section({
           <button
             onClick={() => onMetricChange("p99")}
             className={`px-2 py-0.5 text-[10px] font-semibold rounded transition ${
-              wind100Metric === "p99"
+              metric === "p99"
                 ? "bg-emerald-600 text-white"
                 : "text-emerald-700 hover:bg-emerald-50"
             }`}
@@ -576,22 +633,22 @@ function Wind100Section({
       <div className="px-3 py-2 space-y-2">
         {/* Metric description */}
         <p className="text-[10px] text-emerald-700 leading-tight">
-          {wind100Metric === "max"
-            ? "Absolute maximum 100 m wind speed per quadrant (ERA5, Lagrangian)."
-            : "99th-percentile 100 m wind speed per quadrant (ERA5, Lagrangian)."}
+          {metric === "max"
+            ? `Absolute maximum ${levelLabel.toLowerCase()} speed per quadrant (ERA5, Lagrangian).`
+            : `99th-percentile ${levelLabel.toLowerCase()} speed per quadrant (ERA5, Lagrangian).`}
         </p>
 
         {!selectedTimestep ? (
           <p className="text-xs text-gray-400 italic py-1">
-            Select a timestep to see wind100 data on the map and here.
+            Select a timestep to see wind data on the map and here.
           </p>
-        ) : !w100Entry || (w100Entry.max === null && w100Entry.p99 === null) ? (
+        ) : !entry || (entry.max === null && entry.p99 === null) ? (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-            No wind100 data for this timestep.
+            No {levelLabel.toLowerCase()} data for this timestep.
           </p>
         ) : !metricData ? (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-            No {wind100Metric === "max" ? "max" : "P99"} data at this timestep.
+            No {metric === "max" ? "max" : "P99"} data at this timestep.
           </p>
         ) : (
           <>
@@ -600,8 +657,8 @@ function Wind100Section({
                 NW→SW(bottom-left), NE→SE(bottom-right). */}
             <div className="grid grid-cols-2 gap-1.5">
               {GRID_KEYS.map((qd) => {
-                const q: Wind100QArray | null = metricData[qd];
-                const isGlobal = metricData.gq === qd;
+                const q: WindQArray | null = metricData[qd];
+                const isGlobal = gq === qd;
                 const geoLabel = QUADRANT_DISPLAY[qd] ?? qd;
                 if (!q) {
                   return (
@@ -613,7 +670,10 @@ function Wind100Section({
                     </div>
                   );
                 }
-                const [qLon, qLat, qVal, qDist] = q;
+                const [dLon, dLat, qVal] = q;
+                if (qVal == null) return null;
+                // Euclidean degrees, exactly as the source defines it.
+                const qDist = quadrantDistance(q);
                 const color = getWindColor(qVal, globalMax);
                 return (
                   <div
@@ -638,9 +698,9 @@ function Wind100Section({
                     {qDist != null && (
                       <div className="text-[9px] text-gray-500">dist: {qDist.toFixed(2)}°</div>
                     )}
-                    {qLon != null && qLat != null && (
+                    {dLon != null && dLat != null && (
                       <div className="text-[9px] text-gray-400 leading-tight">
-                        Δ{(qLon - (selectedTimestep?.lon ?? 0)).toFixed(2)}°, Δ{(qLat - (selectedTimestep?.lat ?? 0)).toFixed(2)}°
+                        Δ{dLon.toFixed(2)}°, Δ{dLat.toFixed(2)}°
                       </div>
                     )}
                   </div>
@@ -649,10 +709,14 @@ function Wind100Section({
             </div>
 
             {/* Global quad note */}
-            {metricData.gq && (
+            {gq && (
               <p className="text-[10px] text-gray-500 leading-tight">
-                ★ Global maximum in <span className="font-semibold text-emerald-700">{QUADRANT_DISPLAY[metricData.gq] ?? metricData.gq}</span> quadrant.
-                &ensp;Scale max: {globalMax.toFixed(1)} m s⁻¹ (dataset-wide).
+                ★ Largest value in{" "}
+                <span className="font-semibold text-emerald-700">
+                  {QUADRANT_DISPLAY[gq] ?? gq}
+                </span>{" "}
+                quadrant. &ensp;Scale max: {globalMax.toFixed(1)} m s⁻¹
+                (dataset-wide, {levelLabel.toLowerCase()}).
               </p>
             )}
 
@@ -697,11 +761,13 @@ function MiniColorScale({ globalMax }: { globalMax: number }) {
 // ── Timestep detail card ───────────────────────────────────────────────────────
 interface TimestepDetailProps {
   ts: Timestep;
-  w100Entry: Wind100TimestepEntry | null;
-  wind100Metric: Wind100Metric;
+  /** Wind data at the ACTIVE height only. */
+  entry: WindLevelEntryOrNull;
+  levelLabel: string;
+  metric: WindMetric;
 }
 
-function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
+function TimestepDetail({ ts, entry, levelLabel, metric }: TimestepDetailProps) {
   const hasEnergetics =
     ts.Az  !== undefined || ts.Ae  !== undefined ||
     ts.Kz  !== undefined || ts.Ke  !== undefined;
@@ -709,11 +775,10 @@ function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
   const fJ  = (v: number | undefined) => v !== undefined ? `${v.toFixed(0)} J m⁻²` : "—";
   const fW  = (v: number | undefined) => v !== undefined ? `${v.toFixed(3)} W m⁻²` : "—";
 
-  // Wind100 data for the selected metric
-  const metricData = w100Entry
-    ? wind100Metric === "max" ? w100Entry.max : w100Entry.p99
-    : null;
-  const metricLabel = wind100Metric === "max" ? "Maximum" : "99th percentile";
+  // Wind at the active height, for the selected statistic.
+  const metricData = entry ? (metric === "max" ? entry.max : entry.p99) : null;
+  const metricLabel = metric === "max" ? "Maximum" : "99th percentile";
+  const gq = globalQuadrant(metricData);
 
   // Format wind value
   const fWind = (v: number | undefined) => v !== undefined ? `${v.toFixed(1)} m s⁻¹` : "—";
@@ -727,7 +792,7 @@ function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
       <InfoRow label="Date / time" value={formatDatetime(ts.date)} />
       <InfoRow label="Position" value={`${formatLat(ts.lat)}, ${formatLon(ts.lon)}`} />
       <InfoRow label="Phase" value={PHASE_LABELS[ts.phase] ?? ts.phase} highlight />
-      <InfoRow label="vor42" value={formatVor42(ts.vor42)} />
+      <InfoRow label="Central relative vorticity" value={formatVorticity(ts.vor42)} />
 
       {/* ── Cyclone Phase Space at this timestep ───────────────────────── */}
       {ts.cps_B !== undefined && (
@@ -759,10 +824,10 @@ function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
         </div>
       )}
 
-      {/* ── Wind100 data ──────────────────────────────────────────────── */}
+      {/* ── Wind at the active height ─────────────────────────────────── */}
       <div className="pt-1.5 border-t border-gray-200">
         <p className="text-xs font-semibold text-emerald-700 mb-1.5">
-          🌬️ Wind 100 m ({metricLabel})
+          🌬️ {levelLabel} ({metricLabel})
           {!metricData && (
             <span className="font-normal text-gray-400 ml-1">
               — not available at this timestep
@@ -772,20 +837,26 @@ function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
 
         {metricData ? (
           <div className="space-y-1">
-            {/* Global maximum - from the quadrant identified by gq */}
+            {/* Largest of the four quadrants at this timestep */}
             {(() => {
-              const gq = metricData.gq as "NW" | "NE" | "SW" | "SE" | null;
               const globalData = gq ? metricData[gq] : null;
               const geoLabel = gq ? (QUADRANT_DISPLAY[gq] ?? gq) : null;
-              if (!globalData || !geoLabel) return <InfoRow label="Global max" value="— no data" />;
-              // globalData[0] = absolute lon, [1] = absolute lat
-              const dlon = globalData[0] != null ? globalData[0] - ts.lon : undefined;
-              const dlat = globalData[1] != null ? globalData[1] - ts.lat : undefined;
+              if (!globalData || !geoLabel) {
+                return <InfoRow label="Largest value" value="— no data" />;
+              }
+              // Stored as offsets from the cyclone centre.
+              const [dlon, dlat, val] = globalData;
               return (
                 <>
-                  <InfoRow label={`Global max (${geoLabel})`} value={fWind(globalData[2])} />
-                  <InfoRow label="  Δlon, Δlat" value={`${fDelta(dlon)}, ${fDelta(dlat)}`} />
-                  <InfoRow label="  Distance" value={fDist(globalData[3])} />
+                  <InfoRow label={`Largest value (${geoLabel})`} value={fWind(val ?? undefined)} />
+                  <InfoRow
+                    label="  Δlon, Δlat"
+                    value={`${fDelta(dlon ?? undefined)}, ${fDelta(dlat ?? undefined)}`}
+                  />
+                  <InfoRow
+                    label="  Distance"
+                    value={fDist(quadrantDistance(globalData) ?? undefined)}
+                  />
                 </>
               );
             })()}
@@ -794,18 +865,31 @@ function TimestepDetail({ ts, w100Entry, wind100Metric }: TimestepDetailProps) {
             <p className="text-xs text-gray-400 font-medium mt-1.5">By quadrant</p>
             {GRID_KEYS.map((q) => {
               const qData = metricData[q];
-              const isGlobal = metricData.gq === q;
+              const isGlobal = gq === q;
               const geoLabel = QUADRANT_DISPLAY[q] ?? q;
-              if (!qData) return (
-                <InfoRow key={q} label={geoLabel} value="— no data" />
-              );
-              const dlon = qData[0] != null ? qData[0] - ts.lon : undefined;
-              const dlat = qData[1] != null ? qData[1] - ts.lat : undefined;
+              if (!qData) {
+                return <InfoRow key={q} label={geoLabel} value="— no data" />;
+              }
+              const [dlon, dlat, val] = qData;
               return (
-                <div key={q} className={`pl-1 border-l-2 ${isGlobal ? "border-emerald-400" : "border-emerald-100"} ml-1`}>
-                  <InfoRow label={`${geoLabel}${isGlobal ? " ★" : ""}`} value={fWind(qData[2])} />
-                  <InfoRow label="  Δlon, Δlat" value={`${fDelta(dlon)}, ${fDelta(dlat)}`} />
-                  <InfoRow label="  Distance" value={fDist(qData[3])} />
+                <div
+                  key={q}
+                  className={`pl-1 border-l-2 ${
+                    isGlobal ? "border-emerald-400" : "border-emerald-100"
+                  } ml-1`}
+                >
+                  <InfoRow
+                    label={`${geoLabel}${isGlobal ? " ★" : ""}`}
+                    value={fWind(val ?? undefined)}
+                  />
+                  <InfoRow
+                    label="  Δlon, Δlat"
+                    value={`${fDelta(dlon ?? undefined)}, ${fDelta(dlat ?? undefined)}`}
+                  />
+                  <InfoRow
+                    label="  Distance"
+                    value={fDist(quadrantDistance(qData) ?? undefined)}
+                  />
                 </div>
               );
             })}

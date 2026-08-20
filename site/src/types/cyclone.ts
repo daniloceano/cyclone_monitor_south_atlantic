@@ -26,28 +26,23 @@ export interface TrackSummary {
   lysis_lon: number;
   /** Named genesis region derived from genesis lat/lon. */
   genesis_region: string;
-  /** Maximum vor42 (filtered and normalized relative vorticity, ×10⁻⁵ s⁻¹).
-   *  Absolute value is used to keep positive values. This is the intensity
-   *  measure used throughout the application. */
-  max_vor42: number;
-  /** Intensity quantile label relative to all tracks in the dataset. */
-  quantile: "top 5%" | "top 10%" | "top 25%" | "top 50%" | "bottom 50%";
   /**
-   * True when the cyclone carries the full diagnostic stack (LEC energetics +
-   * lifecycle phases + genesis region). False for track-only cyclones from the
-   * raw tracking catalogue, which carry position and vorticity alone.
+   * Peak intensity over the life cycle, one field per display variable.
    *
-   * Track-only cyclones are loaded from separate files (summary_raw.json) and
-   * come from a DIFFERENT TRACKING VINTAGE than the processed ones — see the
-   * About page. Their IDs are namespaced via `src`.
+   * `max_vor42` — maximum of vor42, the relative vorticity at 850 hPa
+   * spectrally filtered to T42, stored as a magnitude (×10⁻⁵ s⁻¹).
+   *
+   * `max_wind10` / `max_wind100` — maximum, over all timesteps, of the largest
+   * of the four quadrant maxima at that height (m s⁻¹). Built from the `max`
+   * statistic only: p99 is a detailed diagnostic, never an intensity
+   * classifier. Absent when the cyclone has no wind data at that height.
+   *
+   * The active DisplayVariable picks which of these colours the map and drives
+   * the intensity filter — they always move together.
    */
-  processed: boolean;
-  /**
-   * Original catalogue ID, present only on track-only cyclones. Their `id` is
-   * namespaced (`src + 100_000_000`) because the raw catalogue is a different
-   * tracking vintage whose numbering collides with the processed catalogue's.
-   */
-  src?: number;
+  max_vor42: number;
+  max_wind10?: number;
+  max_wind100?: number;
   /** CPS phase_class code (EC, SC, ST, SD, EC_like, …). Absent without CPS. */
   cps_class?: string;
   /** Human-readable expansion of cps_class. */
@@ -111,6 +106,41 @@ export interface QuantileThresholds {
   max: number;
 }
 
+// ─── Display variables ────────────────────────────────────────────────────────
+
+/**
+ * The variable that colours the tracks and drives the intensity filter.
+ *
+ * The internal key `vor42` is kept because it is the column name throughout the
+ * pipeline and the data files. It is never shown to the user: the interface
+ * calls it "Central relative vorticity" (see DISPLAY_VARIABLES below).
+ */
+export type DisplayVariable = "vor42" | "wind10" | "wind100";
+
+/** Wind height implied by the active display variable, in metres.
+ *  There is deliberately no independent wind-height state: the display
+ *  selector is the single source of truth, so no two parts of the interface
+ *  can ever disagree about which height they are showing. */
+export type WindHeight = 10 | 100;
+
+/** Per-variable distribution and labelling, emitted by preprocess_data.py. */
+export interface DisplayVariableInfo {
+  /** User-facing name, e.g. "Central relative vorticity". */
+  label: string;
+  /** Short form for tight spaces, e.g. "Vorticity". */
+  short_label: string;
+  /** Unit as rendered, e.g. "×10⁻⁵ s⁻¹" or "m s⁻¹". */
+  unit: string;
+  /** Field on TrackSummary holding this variable's per-track peak. */
+  field: "max_vor42" | "max_wind10" | "max_wind100";
+  /** Number of decimals to render. */
+  decimals: number;
+  /** How many tracks carry a value for this variable. */
+  n: number;
+  quantile_thresholds: QuantileThresholds;
+  intensity_pdf: IntensityPDF;
+}
+
 /** Root structure of public/data/summary.json. */
 export interface SummaryData {
   /** ISO-8601 datetime when the preprocessing script was run. */
@@ -123,17 +153,18 @@ export interface SummaryData {
   months: number[];
   /** Sorted list of all genesis region names. */
   regions: string[];
-  quantile_thresholds: QuantileThresholds;
-  /** Distribution of max_vor42 — drives the intensity filter. */
-  intensity_pdf?: IntensityPDF;
+  /**
+   * One entry per display variable. The colour scale and the intensity filter
+   * both read the entry for the active variable, which is what keeps them from
+   * ever representing different quantities.
+   */
+  display_variables: Record<DisplayVariable, DisplayVariableInfo>;
   /** Structural classes present, with counts (empty when CPS is absent). */
   cps_classes?: CpsClassInfo[];
   /** Coarse structural groups present, with counts. */
   cps_groups?: { group: string; count: number }[];
   /** How many cyclones had a run rejected as a warm seclusion. */
   warm_seclusion_count?: number;
-  /** Track counts by processing level. */
-  processing_levels?: { processed: number; raw: number };
   tracks: TrackSummary[];
 }
 
@@ -157,9 +188,7 @@ export interface Timestep {
     | "intensification"
     | "mature"
     | "decay"
-    | "dissipation"
-    /** Track-only cyclones carry no lifecycle classification. */
-    | "unknown";
+    | "dissipation";
   // Lorenz Energy Cycle diagnostics (de Souza et al., Climate Dynamics 2025).
   // Originally 3-hourly, interpolated to 1-hourly in preprocessing.
   /** Zonal available potential energy (J m⁻²). */
@@ -220,8 +249,20 @@ export interface Timestep {
   cps_VTL?: number;
   /** Upper-tropospheric thermal wind, 600–300 hPa. Positive = warm core. */
   cps_VTU?: number;
-  /** Per-timestep structural label. */
+  /**
+   * Raw per-timestep threshold label — unguarded, no persistence requirement.
+   * Right for colouring the phase diagram, WRONG for counting cyclone types:
+   * for that use the cyclone's own category (TrackSummary.cps_class).
+   */
   cps_class?: "extratropical" | "subtropical" | "tropical" | "unclassified";
+  /**
+   * The guarded view of the same timestep: the accepted, ≥36 h persistent
+   * state covering it, or absent. A timestep whose run was rejected (warm
+   * seclusion, genesis out of band) is absent here even when cps_class above
+   * reads "subtropical" — which is exactly the distinction that gets lost if
+   * only the raw label is consulted.
+   */
+  cps_state?: "EC" | "SC" | "TC";
   /** Diagnosed system radius (km). */
   cps_size_km?: number;
   /** Storm motion direction (degrees, 0–360). Interpolated on the circle. */
@@ -241,65 +282,6 @@ export interface TrackDetail {
   timesteps: Timestep[];
 }
 
-// ─── Track-only (raw catalogue) types ─────────────────────────────────────────
-// Produced by scripts/preprocess_raw_tracks.py. These cyclones come from the
-// full Gramcianinov tracking catalogue and carry position and vorticity only.
-//
-// They live in separate files (summary_raw.json, details_raw/{year}.json) and
-// are fetched lazily, because there are ~4x as many of them as processed
-// cyclones and folding them into summary.json would triple the initial load.
-
-/** One entry in summary_raw.json → tracks[]. Leaner than TrackSummary. */
-export interface RawTrackSummary {
-  /** Namespaced ID: src + id_offset. */
-  id: number;
-  /** Original catalogue ID (YYYYNNNN in the raw catalogue's own numbering). */
-  src: number;
-  year: number;
-  month: number;
-  start: string;
-  end: string;
-  duration_h: number;
-  genesis_lat: number;
-  genesis_lon: number;
-  lysis_lat: number;
-  lysis_lon: number;
-  max_vor42: number;
-  coords: [number, number][];
-}
-
-/** Root structure of public/data/summary_raw.json. */
-export interface RawSummaryData {
-  generated: string;
-  total_tracks: number;
-  date_range: { start: string; end: string };
-  years: number[];
-  months: number[];
-  /** Offset applied to the original IDs to build `id`. */
-  id_offset: number;
-  source: { doi: string; label: string };
-  tracks: RawTrackSummary[];
-}
-
-/**
- * Columnar per-track detail. Parallel arrays rather than an array of objects:
- * a raw timestep is four numbers, so object keys would dominate the payload.
- * `dt` holds hours since `t0`, which keeps gaps explicit.
- */
-export interface RawTrackDetail {
-  t0: string;
-  dt: number[];
-  x: number[];
-  y: number[];
-  v: number[];
-}
-
-/** Root structure of public/data/details_raw/{year}.json. */
-export interface RawYearDetails {
-  year: number;
-  tracks: Record<string, RawTrackDetail>;
-}
-
 /** Root structure of public/data/details/{year}.json. */
 export interface YearDetails {
   year: number;
@@ -309,14 +291,14 @@ export interface YearDetails {
 
 // ─── UI state types ───────────────────────────────────────────────────────────
 
-/** Processing level filter. "all" applies no constraint. */
-export type ProcessingFilter = "all" | "processed" | "raw";
-
 /**
- * Intensity (max_vor42) selection.
- * - mode "range": keep tracks with min <= max_vor42 <= max
- * - mode "cutoff": keep tracks with max_vor42 >= min (max is ignored)
+ * Intensity selection, applied to whichever display variable is active.
+ * - mode "range":  keep tracks with min <= value <= max
+ * - mode "cutoff": keep tracks with value >= min (max is ignored)
  * `null` bounds mean "unbounded on that side".
+ *
+ * Bounds are in the active variable's own units, so they are reset when the
+ * display variable changes — a threshold in ×10⁻⁵ s⁻¹ is meaningless in m s⁻¹.
  */
 export interface IntensityFilterState {
   mode: "range" | "cutoff";
@@ -337,9 +319,7 @@ export interface FilterState {
   cpsClasses: string[];
   /** When true, keep only cyclones flagged with a rejected warm-seclusion run. */
   warmSeclusionOnly: boolean;
-  /** Processing level constraint. */
-  processing: ProcessingFilter;
-  /** Intensity constraint on max_vor42. */
+  /** Intensity constraint on the active display variable. */
   intensity: IntensityFilterState;
 }
 
@@ -356,12 +336,6 @@ export const EMPTY_FILTERS: FilterState = {
   cpsGroups: [],
   cpsClasses: [],
   warmSeclusionOnly: false,
-  /**
-   * Defaults to "processed", not "all", on purpose: track-only cyclones live in
-   * a separate ~25 MB file that is only fetched when the filter asks for them.
-   * Defaulting to "all" would pull it on every first paint and undo the split.
-   */
-  processing: "processed",
   intensity: EMPTY_INTENSITY,
 };
 
@@ -419,7 +393,6 @@ export const PHASE_COLORS: Record<string, string> = {
   mature:          "#ea9393",
   decay:           "#ccd3bf",
   dissipation:     "#9e9e9e",   // gray for residual/dissipation
-  unknown:         "#cbd5e1",   // track-only cyclones: no lifecycle classification
 };
 
 export const PHASE_LABELS: Record<string, string> = {
@@ -428,79 +401,104 @@ export const PHASE_LABELS: Record<string, string> = {
   mature:          "Mature",
   decay:           "Decay",
   dissipation:     "Dissipation",
-  unknown:         "Not classified",
 };
 
-// ─── Wind100 types ────────────────────────────────────────────────────────────
-// These types mirror the JSON produced by scripts/generate_wind100_json.py.
-// Source dataset: Zenodo DOI 10.5281/zenodo.19353037
+// ─── Wind types ───────────────────────────────────────────────────────────────
+// These types mirror the JSON produced by scripts/generate_wind_json.py, which
+// derives them from the consolidated per-cyclone base.
 //
-// Physical meaning:
-//   wind100_max = absolute maximum 100 m wind within each Lagrangian quadrant
-//   wind100_p99 = 99th-percentile 100 m wind within each Lagrangian quadrant
+// Sources (both by Paredes Quispe, J. A.):
+//   wind10   Zenodo DOI 10.5281/zenodo.19378255
+//   wind100  Zenodo DOI 10.5281/zenodo.19353037
 //
-// Quadrant convention (relative to cyclone centre, defined by 850 hPa vor42):
-//   NW | NE
-//   ---+---
-//   SW | SE
+// Physical meaning, identical at both heights:
+//   max = absolute maximum wind within each Lagrangian quadrant
+//   p99 = 99th-percentile wind within each Lagrangian quadrant
+//
+// Both are kept: `max` alone classifies track intensity, while the sidebar
+// reports max AND p99 per quadrant as detailed diagnostics.
+//
+// Quadrant keys are the SOURCE's own labels. The producer's N/S labels are
+// inverted relative to the geographic convention, so anything shown to the
+// user must go through QUADRANT_DISPLAY in lib/windQuadrants.ts. Never label a
+// quadrant with its raw key.
+
+/** Prefix identifying a wind level inside the JSON payload. */
+export type WindLevelKey = "w10" | "w100";
+
+/** Which statistic is being shown. */
+export type WindMetric = "max" | "p99";
 
 /**
- * One quadrant entry: [lon, lat, val, dist].
- * Index 0: longitude of the wind extremum (°)
- * Index 1: latitude of the wind extremum (°)
- * Index 2: wind speed at 100 m (m s⁻¹)
- * Index 3: angular distance from wind point to cyclone centre (°)
+ * One quadrant entry: [dlon, dlat, val].
+ *   0  longitude OFFSET from the cyclone centre (°)
+ *   1  latitude OFFSET from the cyclone centre (°)
+ *   2  wind speed (m s⁻¹)
+ *
+ * Offsets, not absolute coordinates: the centre is already on the timestep, so
+ * absolute position is centre + offset and the encoding is lossless while
+ * costing fewer bytes.
+ *
+ * The distance to the centre is NOT stored because it is exactly recoverable —
+ * the source defines it as the Euclidean hypot(dlon, dlat) in degrees, verified
+ * to 1e-14°. Use quadrantDistance() in lib/windQuadrants.ts.
  */
-export type Wind100QArray = [number, number, number, number];
+export type WindQArray = [number | null, number | null, number | null];
 
 /**
- * One metric (max or p99) at one timestep.
- * Each quadrant is null when no data is available.
- * gq = quadrant with the global timestep extremum ("NW" | "NE" | "SW" | "SE").
+ * One metric at one timestep. A quadrant is null when it carries no data.
+ *
+ * The quadrant holding the timestep extremum is not stored either: it is
+ * exactly the argmax of the four values (verified over 74,242 comparisons with
+ * zero ties). Use globalQuadrant() in lib/windQuadrants.ts.
  */
-export interface Wind100MetricEntry {
-  NW: Wind100QArray | null;
-  NE: Wind100QArray | null;
-  SW: Wind100QArray | null;
-  SE: Wind100QArray | null;
-  gq: string | null;
+export interface WindMetricEntry {
+  NW: WindQArray | null;
+  NE: WindQArray | null;
+  SW: WindQArray | null;
+  SE: WindQArray | null;
 }
 
-/** Combined wind100 record for one timestep (both metrics). */
-export interface Wind100TimestepEntry {
-  max: Wind100MetricEntry | null;
-  p99: Wind100MetricEntry | null;
+/** Both statistics for one level at one timestep. */
+export interface WindLevelEntry {
+  max: WindMetricEntry | null;
+  p99: WindMetricEntry | null;
 }
 
+/** Every configured level at one timestep. A level is absent without data. */
+export type WindTimestepEntry = Partial<Record<WindLevelKey, WindLevelEntry>>;
+
 /**
- * Per-year wind100 data, mirroring the structure of details/{year}.json.
- * tracks[String(trackId)][isoDate] = Wind100TimestepEntry
+ * Per-year wind data, mirroring the structure of details/{year}.json.
+ * tracks[String(trackId)][isoDate] = WindTimestepEntry
  */
-export interface Wind100YearData {
+export interface WindYearData {
   year: number;
-  tracks: Record<string, Record<string, Wind100TimestepEntry>>;
+  levels: string[];
+  tracks: Record<string, Record<string, WindTimestepEntry>>;
 }
 
-/**
- * Global statistics from site/public/data/wind100/meta.json.
- * Used for consistent color-scale normalization across the entire dataset.
- */
-export interface Wind100Meta {
-  /** Absolute maximum of all wind100_max values across all tracks (m s⁻¹). */
+/** Global statistics for one level, used to normalise the colour scale. */
+export interface WindLevelMeta {
+  label: string;
+  unit: string;
+  height_m: number;
+  doi: string;
+  /** Dataset-wide maximum of the per-quadrant `max` values (m s⁻¹). */
   max_global_max: number;
-  /** Absolute maximum of all wind100_p99 values (m s⁻¹). */
+  /** Dataset-wide maximum of the per-quadrant `p99` values (m s⁻¹). */
   p99_global_max: number;
-  /** 95th-percentile of all wind100_max values (informational). */
   max_global_p95: number;
-  /** 95th-percentile of all wind100_p99 values (informational). */
   p99_global_p95: number;
+}
+
+/** Root structure of site/public/data/wind/meta.json. */
+export interface WindMeta {
+  levels: Record<string, WindLevelMeta>;
   years: number[];
   total_tracks: number;
   generated: string;
 }
-
-/** Metric selector for the wind100 visualization. */
-export type Wind100Metric = "max" | "p99";
 
 // ─── Sedimentary Basin types ──────────────────────────────────────────────────
 // These types support spatial filtering of cyclones by basin intersection.
@@ -544,27 +542,33 @@ export interface BasinCollection {
 }
 
 /**
- * Per-basin statistics from basin_intersections.json.
+ * Per-basin track counts, one per mode + wind-height combination.
+ *
+ * Keys follow `basinStatKey()` in lib/filters.ts:
+ *   "center"        centre positions only (no height involved)
+ *   "wind_max_10"   10 m wind maxima          "wind_max_100"  100 m
+ *   "wind_max_any"  10 m OR 100 m wind maxima
+ *   "any_10"        centre OR 10 m            "any_100"       centre OR 100 m
+ *   "any_any"       centre OR either height
+ *
+ * Counts are dataset-wide, not counts within the current filter.
  */
-export interface BasinStats {
-  /** Number of tracks whose center passes through this basin. */
-  center_count: number;
-  /** Number of tracks whose maximum wind position passes through this basin. */
-  wind_max_count: number;
-  /** Number of tracks that satisfy either condition. */
-  any_count: number;
-}
+export type BasinStats = Record<string, number>;
 
 /**
  * Intersection data for a single track.
+ *
+ * Only the primitive sets are stored; the unions the filter needs are computed
+ * from them, so a new wind height means one more array here rather than a
+ * combinatorial explosion of precomputed unions.
  */
-export interface TrackBasinIntersection {
-  /** Basin IDs where the cyclone center passes through. */
+export interface BasinTrackEntry {
+  /** Basin IDs the cyclone centre passes through. */
   center: string[];
-  /** Basin IDs where the maximum wind position passes through. */
-  wind_max: string[];
-  /** Union of center and wind_max (either condition). */
-  any: string[];
+  /** Basin IDs the 10 m wind maximum passes through. */
+  wind10: string[];
+  /** Basin IDs the 100 m wind maximum passes through. */
+  wind100: string[];
 }
 
 /**
@@ -583,7 +587,7 @@ export interface BasinIntersections {
     stats: BasinStats;
   }>;
   /** Track ID (as string) -> intersection data. */
-  tracks: Record<string, TrackBasinIntersection>;
+  tracks: Record<string, BasinTrackEntry>;
 }
 
 /**
@@ -595,13 +599,27 @@ export interface BasinIntersections {
 export type BasinFilterMode = "center" | "wind_max" | "any";
 
 /**
+ * Which height's wind maximum the spatial test uses.
+ * - "10"  : the 10 m wind maximum position
+ * - "100" : the 100 m wind maximum position
+ * - "any" : satisfied if EITHER height satisfies it (a logical OR)
+ *
+ * Deliberately labelled "Any" rather than "Both", which would read as an AND.
+ * Orthogonal to BasinFilterMode: mode picks WHICH positions are tested,
+ * this picks WHICH HEIGHT supplies the wind positions.
+ */
+export type BasinWindHeight = "10" | "100" | "any";
+
+/**
  * State for basin-based spatial filtering.
  */
 export interface BasinFilterState {
   /** Selected basin IDs (empty = no filter). */
   selectedBasins: string[];
-  /** Filter mode. */
+  /** Which positions are tested. */
   mode: BasinFilterMode;
+  /** Which height supplies the wind positions (ignored when mode is "center"). */
+  windHeight: BasinWindHeight;
 }
 
 /**
@@ -610,4 +628,50 @@ export interface BasinFilterState {
 export const EMPTY_BASIN_FILTER: BasinFilterState = {
   selectedBasins: [],
   mode: "any",
+  windHeight: "any",
 };
+
+// ─── Provenance ───────────────────────────────────────────────────────────────
+// Mirrors site/public/data/sources.json, emitted from data/metadata/sources.json.
+// The About page renders from this so there is exactly one copy of every DOI in
+// the project and a correction cannot land in one place and not the other.
+
+/** One dataset or publication the monitor draws on. */
+export interface SourceEntry {
+  /** "data" for a distributed dataset, "method" for the paper documenting it. */
+  kind?: "data" | "method";
+  name: string;
+  authors?: string[];
+  orcid?: string[];
+  affiliation?: string;
+  year?: number;
+  version?: string;
+  publication_date?: string;
+  journal?: string;
+  volume?: string;
+  pages?: string;
+  doi?: string | null;
+  url?: string;
+  repository?: string;
+  license?: string;
+  /** True while the dataset is unpublished; pairs with pending_note. */
+  pending?: boolean;
+  pending_note?: string;
+  status?: string;
+  /** What this source contributes to the monitor. */
+  role?: string;
+  /** Monitor fields that originate here. */
+  variables?: string[];
+  coverage?: Record<string, string | number>;
+  /** What the pipeline does to the data locally. */
+  transforms?: string[];
+  /** Conventions a consumer has to respect to read the data correctly. */
+  conventions?: string[];
+}
+
+/** Root structure of site/public/data/sources.json. */
+export interface SourcesRegistry {
+  generated_by?: string;
+  sources: Record<string, SourceEntry>;
+  additional_references?: Record<string, SourceEntry>;
+}

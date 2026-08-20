@@ -2,26 +2,46 @@
 """
 Data Pipeline Orchestrator for South Atlantic Cyclone Monitor.
 
-This script runs the complete data pipeline:
-    1. Download source data from Zenodo
-    2. Preprocess and validate data → consolidated CSV
-    3. Merge wind100 data → per-cyclone Parquet files  [optional step]
+Builds the consolidated per-cyclone base, in order:
 
-The consolidated CSV (Step 2) is the canonical flat data product used by:
-    - The web application (via scripts/preprocess_data.py → JSON)
-    - Step 3 (wind100 merge)
+    1. Download tracks + LEC energetics from Zenodo
+    2. Preprocess and validate  -> consolidated CSV (+ CPS merge)
+    3. Download every wind level from Zenodo          [optional]
+    4. Merge all wind levels    -> per-cyclone Parquet + cyclones.parquet
+    5. Build the per-cyclone taxonomy index
 
-The per-cyclone Parquet files (Step 3) are the enriched data product with
-wind100 statistics, organised as data/processed/tracks_by_id/{Y}/{M}/{id}.parquet
+Steps 3-5 are optional because the wind archives are ~360 MB and the base is
+usable without them; pass --wind to run them.
+
+The products
+------------
+    data/processed/tracks_south_atlantic_consolidated.csv
+        Flat, one row per timestep. Feeds scripts/preprocess_data.py.
+
+    data/processed/tracks_by_id/{Y}/{M}/{id}.parquet
+        THE consolidated analysis product: one file per cyclone, one row per
+        timestep, carrying track + LEC + CPS + every wind level.
+
+    data/processed/cyclones.parquet
+        One row per cyclone. Attributes that do not vary through the life cycle
+        live here instead of being repeated across every timestep.
+
+    data/processed/cyclone_categories.json
+        Per-cyclone taxonomies (currently CPS): category -> track_ids.
+
+The site's own artefacts are generated separately, from these:
+    python scripts/preprocess_data.py
+    python scripts/generate_wind_json.py
+    python scripts/compute_basin_intersections.py
 
 Run from project root:
-    python scripts/data/run_pipeline.py
+    python scripts/data/run_pipeline.py --wind
 
 Options:
-    --force            Force re-download even if source file exists
-    --skip-download    Skip download step (use existing source file)
-    --wind100          Also run Step 3: merge wind100 data into per-track Parquet files
-    --skip-wind100     Explicitly skip wind100 merge (default behaviour)
+    --force            Force re-download even if the source file exists
+    --skip-download    Skip the download step (use the existing source file)
+    --wind             Also run steps 3-5 (wind download, merge, taxonomy index)
+    --skip-wind        Explicitly skip them (default behaviour)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
@@ -51,16 +71,22 @@ PIPELINE_STEPS = [
         "skip_flag": None,
     },
     {
-        "name": "Download wind100 data",
-        "script": "download_wind100.py",
-        "description": "Download and unpack 100 m wind statistics from Zenodo",
-        "skip_flag": "skip_wind100",
+        "name": "Download wind data",
+        "script": "download_wind.py",
+        "description": "Download and unpack every configured wind level from Zenodo",
+        "skip_flag": "skip_wind",
     },
     {
-        "name": "Merge wind100 data",
-        "script": "merge_wind100.py",
-        "description": "Merge 100 m wind statistics into per-cyclone Parquet files",
-        "skip_flag": "skip_wind100",
+        "name": "Merge wind data",
+        "script": "merge_wind.py",
+        "description": "Build the per-cyclone Parquet base and cyclones.parquet",
+        "skip_flag": "skip_wind",
+    },
+    {
+        "name": "Build cyclone taxonomy index",
+        "script": "build_cyclone_categories.py",
+        "description": "Per-cyclone categories (CPS) -> track_ids",
+        "skip_flag": "skip_wind",
     },
 ]
 
@@ -110,14 +136,14 @@ def main() -> int:
         help="Skip download step (use existing source file)",
     )
     parser.add_argument(
-        "--wind100",
+        "--wind",
         action="store_true",
-        help="Run Step 3: merge wind100 data into per-track Parquet files",
+        help="Also run the wind download, the merge and the taxonomy index",
     )
     args = parser.parse_args()
 
-    # Step 3 is skipped unless --wind100 is given
-    args.skip_wind100 = not args.wind100
+    # The wind steps are skipped unless --wind is given
+    args.skip_wind = not args.wind
     
     print("\n" + "=" * 70)
     print("South Atlantic Cyclone Monitor — Data Pipeline")
@@ -189,8 +215,8 @@ def main() -> int:
         print("  1. Generate web app JSON:")
         print("     python scripts/preprocess_data.py")
         print()
-        print("  2. Merge wind100 (if not already done):")
-        print("     python scripts/data/run_pipeline.py --skip-download --wind100")
+        print("  2. Merge the wind levels (if not already done):")
+        print("     python scripts/data/run_pipeline.py --skip-download --wind")
         print()
         print("  3. Run web app locally:")
         print("     cd site && npm install && npm run dev")

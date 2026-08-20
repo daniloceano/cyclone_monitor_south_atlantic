@@ -20,7 +20,7 @@ The canonical data source is the Zenodo archive containing complete cyclone trac
 | Unique tracks | 6,789 |
 | Period | 1979-01-01 to 2021-01-07 |
 | Geographic coverage | South Atlantic (lat −74.9° to −16.0°, lon −84.3° to +179.9°) |
-| File size | ~311 MB |
+| File size | 372 MB |
 
 ### Temporal Resolution
 
@@ -132,11 +132,11 @@ Per-track fields:
 
 ### `site/public/data/details/{year}.json`
 
-One file per year (43 files, ~2 MB each). Loaded on demand when a track is clicked. Contains full timestep data for all tracks in that year.
+One file per year (43 files, ~6.5 MB each). Loaded on demand when a track is clicked. Contains full timestep data for all tracks in that year.
 
 ## Intensity Measure: vor42
 
-`vor42` (relative vorticity at 400 hPa, ×10⁻⁵ s⁻¹) is used as the intensity proxy because:
+`vor42` (relative vorticity at 850 hPa, ×10⁻⁵ s⁻¹) is used as the intensity proxy because:
 - It is 100% complete (no missing values)
 - It is a physically meaningful intensity indicator for extratropical cyclones
 - Higher values indicate more intense cyclonic circulation

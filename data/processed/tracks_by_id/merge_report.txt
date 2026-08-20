@@ -1,66 +1,66 @@
 ======================================================================
-Wind100 Merge — Validation & Coverage Report
+Consolidated per-cyclone base - Validation & Coverage Report
 ======================================================================
-Generated : 2026-08-12 21:15:56
-Elapsed   : 66.2 s
+Generated : 2026-08-20 17:57:02
+Elapsed   : 114.6 s
+Levels    : wind10, wind100
 
-──────────────────────────────────────────────────────────────────────
-Dataset Sizes
-──────────────────────────────────────────────────────────────────────
-  Tracks in main dataset              : 6,789
-  Unique track IDs in wind100 index   : 7,987
-  Tracks present in BOTH datasets     : 6,789
-  Tracks in main ONLY (no wind100)    : 0
-  Tracks in wind100 ONLY (no main)    : 1,198
-    Years affected                    : 1979, 1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020
+----------------------------------------------------------------------
+Catalogue
+----------------------------------------------------------------------
+  Cyclones in the energetics catalogue : 6,789
+  Timesteps                            : 631,009
 
-──────────────────────────────────────────────────────────────────────
-wind100_max Coverage
-──────────────────────────────────────────────────────────────────────
-  Tracks with wind100_max file        : 6,789
-  Tracks — full timestep coverage     : 6,789
-  Tracks — partial timestep coverage  : 0
-  Tracks — no wind100_max file        : 0
-  Timesteps with wind100_max data     : 631,009 / 631,009  (100.0%)
+----------------------------------------------------------------------
+wind10  (10.5281/zenodo.19378255)
+----------------------------------------------------------------------
+  Unique track IDs in the archive     : 7,987
+  Present in BOTH                     : 6,789
+  In catalogue ONLY (no wind)         : 0
+  In wind ONLY (not in catalogue)     : 1,198  [skipped]
+  Tracks with a max file              : 6,789
+  Tracks with a p99 file              : 6,789
+  Tracks - full timestep coverage     : 6,789
+  Tracks - partial timestep coverage  : 0
+  Timesteps with max data             : 631,009 / 631,009  (100.0%)
+  Timesteps with p99 data             : 631,009 / 631,009  (100.0%)
 
-──────────────────────────────────────────────────────────────────────
-wind100_p99 Coverage
-──────────────────────────────────────────────────────────────────────
-  Tracks with wind100_p99 file        : 6,789
-  Tracks — full timestep coverage     : 6,789
-  Tracks — partial timestep coverage  : 0
-  Tracks — no wind100_p99 file        : 0
-  Timesteps with wind100_p99 data     : 631,009 / 631,009  (100.0%)
+----------------------------------------------------------------------
+wind100  (10.5281/zenodo.19353037)
+----------------------------------------------------------------------
+  Unique track IDs in the archive     : 7,987
+  Present in BOTH                     : 6,789
+  In catalogue ONLY (no wind)         : 0
+  In wind ONLY (not in catalogue)     : 1,198  [skipped]
+  Tracks with a max file              : 6,789
+  Tracks with a p99 file              : 6,789
+  Tracks - full timestep coverage     : 6,789
+  Tracks - partial timestep coverage  : 0
+  Timesteps with max data             : 631,009 / 631,009  (100.0%)
+  Timesteps with p99 data             : 631,009 / 631,009  (100.0%)
 
-──────────────────────────────────────────────────────────────────────
-Known Discrepancies and Notes
-──────────────────────────────────────────────────────────────────────
-  • The Zenodo record for the wind100 dataset (DOI: 10.5281/zenodo.
-    19353037) states coverage for 1979–2020. However, a local folder
-    '2021_wind100' is present and has been processed. The 2021 data
-    contains 1 track (20210007), which is consistent with the main
-    dataset ending on 2021-01-07. This is treated as valid data.
+----------------------------------------------------------------------
+Conventions preserved
+----------------------------------------------------------------------
+  * LEC terms are native 3-hourly, linearly interpolated to 1-hourly
+    upstream. 'lec_original' is True on the original values.
+  * CPS parameters are native 3-hourly. 'cps_original' marks computed
+    values. cps_class is the raw per-timestep threshold label;
+    cps_state is the guarded >=36 h persistent state, or empty.
+  * Wind data are 1-hourly and are NOT interpolated. NaN is preserved
+    wherever no wind record matches a catalogue timestep.
+  * Wind 'dist' is Euclidean degrees, hypot(dlon, dlat) - verified to
+    1e-14 deg against the quadrant offsets, not a great-circle distance.
+  * The '*_global_quad' columns hold the NAME of the quadrant carrying
+    the extremum, not its value.
+  * All timestamps are UTC-naive on both sides. No tz conversion.
 
-  • wind100 track IDs may not fully overlap with the main dataset.
-    Differences arise from distinct filtering thresholds between the
-    two datasets. See 'Tracks in wind100 ONLY' count above.
-
-  • LEC energetics in the main dataset are 3-hourly interpolated to
-    1-hourly. The 'lec_original' flag (True = original 3-hourly value)
-    is preserved in all output files.
-
-  • wind100 data are 1-hourly. No interpolation is applied to wind100
-    columns. NaN is preserved where no wind100 record matches.
-
-  • Timezone: all timestamps are UTC-naive in both datasets. No tz
-    conversion is applied.
-
-──────────────────────────────────────────────────────────────────────
+----------------------------------------------------------------------
 Output
-──────────────────────────────────────────────────────────────────────
-  Directory : data/processed/tracks_by_id/
-  Structure : {YYYY}/{MM:02d}/{track_id}.parquet
-  Format    : Parquet (pyarrow)
-  Columns   : 40 main (32 without CPS) + 17 wind100_max + 17 wind100_p99
+----------------------------------------------------------------------
+  Per timestep : data/processed/tracks_by_id/{YYYY}/{MM}/{track_id}.parquet
+                 109 columns (41 catalogue + 68 wind)
+  Per cyclone  : data/processed/cyclones.parquet
+  Format       : Parquet (pyarrow)
 
 ======================================================================

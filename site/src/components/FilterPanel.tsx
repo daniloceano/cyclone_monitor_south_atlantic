@@ -9,12 +9,20 @@ import {
   BasinCollection,
   BasinIntersections,
   BasinFilterMode,
+  BasinWindHeight,
+  DisplayVariable,
+  DisplayVariableInfo,
   EMPTY_BASIN_FILTER,
   EMPTY_FILTERS,
-  ProcessingFilter,
   CPS_GROUP_COLORS,
 } from "@/types/cyclone";
-import { toggleValue, getBasinFilterModeLabel, hasActiveFilters } from "@/lib/filters";
+import {
+  toggleValue,
+  getBasinFilterModeLabel,
+  getBasinWindHeightLabel,
+  basinStatKey,
+  hasActiveFilters,
+} from "@/lib/filters";
 import IntensityFilter from "./IntensityFilter";
 
 interface FilterPanelProps {
@@ -22,6 +30,9 @@ interface FilterPanelProps {
   filters: FilterState;
   onFiltersChange: (f: FilterState) => void;
   filteredCount: number;
+  /** Active display variable and its descriptor, for the intensity section. */
+  displayVariable: DisplayVariable;
+  displayInfo: DisplayVariableInfo | null;
   // Basin filter props
   basinCollection: BasinCollection | null;
   basinIntersections: BasinIntersections | null;
@@ -34,6 +45,8 @@ export default function FilterPanel({
   filters,
   onFiltersChange,
   filteredCount,
+  displayVariable,
+  displayInfo,
   basinCollection,
   basinIntersections,
   basinFilter,
@@ -41,7 +54,7 @@ export default function FilterPanel({
 }: FilterPanelProps) {
   type SectionKey =
     | "year" | "month" | "region" | "basin"
-    | "intensity" | "type" | "processing";
+    | "intensity" | "type";
   const [expanded, setExpanded] = useState<SectionKey | null>("year");
 
   const hasFilters = hasActiveFilters(filters);
@@ -59,9 +72,6 @@ export default function FilterPanel({
   }
   function toggleCpsClass(c: string) {
     onFiltersChange({ ...filters, cpsClasses: toggleValue(filters.cpsClasses, c) });
-  }
-  function setProcessing(p: ProcessingFilter) {
-    onFiltersChange({ ...filters, processing: p });
   }
 
   const typeBadge =
@@ -92,27 +102,35 @@ export default function FilterPanel({
       mode,
     });
   }
+  function setBasinWindHeight(windHeight: BasinWindHeight) {
+    onBasinFilterChange({
+      ...basinFilter,
+      windHeight,
+    });
+  }
   function clearBasinFilter() {
     onBasinFilterChange(EMPTY_BASIN_FILTER);
   }
 
-  // Get basin count for display
+  /**
+   * Dataset-wide track count for a basin under the current mode + height.
+   *
+   * These are counts across the whole catalogue, not within the currently
+   * applied filter — they exist to show which basins are worth selecting.
+   */
   const getBasinTrackCount = (basinId: string): number => {
     if (!basinIntersections) return 0;
     const basinData = basinIntersections.basins[basinId];
     if (!basinData) return 0;
-    // Return count based on current filter mode
-    switch (basinFilter.mode) {
-      case "center":
-        return basinData.stats.center_count;
-      case "wind_max":
-        return basinData.stats.wind_max_count;
-      case "any":
-        return basinData.stats.any_count;
-      default:
-        return basinData.stats.any_count;
-    }
+    const key = basinStatKey(basinFilter.mode, basinFilter.windHeight);
+    return basinData.stats[key] ?? 0;
   };
+
+  /** Wording for the basin explainer, matching the selected height. */
+  const heightPhrase =
+    basinFilter.windHeight === "any"
+      ? "10 m or 100 m wind"
+      : `${basinFilter.windHeight} m wind`;
 
   return (
     <div className="flex flex-col border-b border-gray-200 flex-shrink-0">
@@ -211,10 +229,11 @@ export default function FilterPanel({
         </div>
       </FilterSection>
 
-      {/* Intensity filter */}
-      {summaryData.intensity_pdf && (
+      {/* Intensity filter — always describes the ACTIVE display variable, so
+          the map's colours and this control can never disagree. */}
+      {displayInfo?.intensity_pdf && (
         <FilterSection
-          title="Intensity (vor42)"
+          title={`Intensity (${displayInfo.short_label.toLowerCase()})`}
           active={intensityActive}
           expanded={expanded === "intensity"}
           onToggle={() => setExpanded(expanded === "intensity" ? null : "intensity")}
@@ -222,7 +241,11 @@ export default function FilterPanel({
           maxHeightClass="max-h-none"
         >
           <IntensityFilter
-            pdf={summaryData.intensity_pdf}
+            // Remounting on variable change resets the drag state along with
+            // the bounds, so no handle is left sitting at a stale position.
+            key={displayVariable}
+            pdf={displayInfo.intensity_pdf}
+            info={displayInfo}
             value={filters.intensity}
             onChange={(intensity) => onFiltersChange({ ...filters, intensity })}
             matchCount={filteredCount}
@@ -329,69 +352,6 @@ export default function FilterPanel({
         </FilterSection>
       )}
 
-      {/* Processing level filter */}
-      {summaryData.processing_levels && (
-        <FilterSection
-          title="Processing Level"
-          active={filters.processing !== "all"}
-          expanded={expanded === "processing"}
-          onToggle={() => setExpanded(expanded === "processing" ? null : "processing")}
-          badgeCount={filters.processing !== "all" ? 1 : 0}
-        >
-          <div className="space-y-1.5">
-            {([
-              ["all", "All cyclones", null],
-              ["processed", "Processed", summaryData.processing_levels.processed],
-              ["raw", "Track only", summaryData.processing_levels.raw],
-            ] as [ProcessingFilter, string, number | null][]).map(([key, label, count]) => (
-              <button
-                key={key}
-                onClick={() => setProcessing(key)}
-                disabled={count === 0}
-                className={`w-full text-xs text-left px-2 py-1 rounded transition flex items-center justify-between ${
-                  filters.processing === key
-                    ? "bg-blue-600 text-white"
-                    : count === 0
-                    ? "bg-gray-50 text-gray-300 cursor-not-allowed"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                <span>{label}</span>
-                {count !== null && (
-                  <span
-                    className={`text-[10px] ${
-                      filters.processing === key ? "text-white/70" : "text-gray-400"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            ))}
-            <p className="text-[10px] text-gray-400 leading-tight pt-1">
-              <span className="font-medium text-gray-500">Processed</span> cyclones
-              carry LEC energetics, lifecycle phases, phase space and a genesis
-              region. <span className="font-medium text-gray-500">Track only</span>{" "}
-              cyclones come from the raw tracking catalogue with position and
-              vorticity alone.
-              {summaryData.processing_levels.raw > 0 && (
-                <span className="block mt-1 text-amber-600">
-                  Track-only cyclones come from a different tracking vintage than
-                  the processed ones and load a separate ~25 MB file on first use.
-                  See the About page.
-                </span>
-              )}
-              {summaryData.processing_levels.raw === 0 && (
-                <span className="block mt-1 text-amber-600">
-                  The raw catalogue is not ingested in this build, so every
-                  cyclone here is fully processed.
-                </span>
-              )}
-            </p>
-          </div>
-        </FilterSection>
-      )}
-
       {/* Basin filter */}
       {basinCollection && (
         <FilterSection
@@ -425,6 +385,44 @@ export default function FilterPanel({
                   {getBasinFilterModeLabel(mode)}
                 </button>
               ))}
+            </div>
+
+            {/* Wind height selector — a second, independent dimension: the mode
+                above chooses WHICH positions are tested, this chooses WHICH
+                HEIGHT supplies the wind positions. Irrelevant for "center",
+                which tests no wind position, so it is disabled there. */}
+            <div className="flex items-center gap-1 mb-2">
+              <span
+                className={`text-xs mr-1 ${
+                  basinFilter.mode === "center" ? "text-gray-300" : "text-gray-500"
+                }`}
+              >
+                Wind height:
+              </span>
+              {(["10", "100", "any"] as BasinWindHeight[]).map((h) => {
+                const disabled = basinFilter.mode === "center";
+                return (
+                  <button
+                    key={h}
+                    disabled={disabled}
+                    onClick={() => setBasinWindHeight(h)}
+                    className={`text-[10px] px-1.5 py-0.5 rounded transition ${
+                      disabled
+                        ? "bg-gray-50 text-gray-300 cursor-not-allowed"
+                        : basinFilter.windHeight === h
+                        ? "bg-teal-600 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                    title={
+                      h === "any"
+                        ? "Satisfied if the 10 m OR the 100 m wind maximum enters the basin"
+                        : `Use the ${h} m wind maximum position`
+                    }
+                  >
+                    {getBasinWindHeightLabel(h)}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Clear basin filter */}
@@ -473,9 +471,12 @@ export default function FilterPanel({
 
             {/* Info text */}
             <p className="text-[10px] text-gray-400 mt-1">
-              {basinFilter.mode === "center" && "Tracks where cyclone center passes through basin"}
-              {basinFilter.mode === "wind_max" && "Tracks where max wind (100m) passes through basin"}
-              {basinFilter.mode === "any" && "Tracks where center or max wind passes through basin"}
+              {basinFilter.mode === "center" &&
+                "Tracks whose cyclone centre passes through the basin"}
+              {basinFilter.mode === "wind_max" &&
+                `Tracks whose ${heightPhrase} maximum passes through the basin`}
+              {basinFilter.mode === "any" &&
+                `Tracks whose centre or ${heightPhrase} maximum passes through the basin`}
             </p>
           </div>
         </FilterSection>

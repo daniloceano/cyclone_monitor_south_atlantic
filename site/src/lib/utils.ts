@@ -21,9 +21,28 @@ export function formatLon(lon: number): string {
   return `${Math.abs(lon).toFixed(2)}° ${lon < 0 ? "W" : "E"}`;
 }
 
-/** Format vor42 value with units. */
-export function formatVor42(v: number): string {
+/**
+ * Format a central relative vorticity value with its unit.
+ *
+ * The internal column is named vor42 — relative vorticity at 850 hPa,
+ * spectrally filtered to T42 — but that name is never shown to the user.
+ * Stored as a magnitude, so the value is positive for a Southern-Hemisphere
+ * cyclone; the sign convention is not altered anywhere in the interface.
+ */
+export function formatVorticity(v: number): string {
   return `${v.toFixed(3)} × 10⁻⁵ s⁻¹`;
+}
+
+/**
+ * Format a peak value in whichever display variable is active, with its unit.
+ * Returns an em dash when the cyclone carries no value for that variable.
+ */
+export function formatDisplayValue(
+  value: number | undefined,
+  info: { unit: string; decimals: number } | null,
+): string {
+  if (value === undefined || value === null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(info?.decimals ?? 2)} ${info?.unit ?? ""}`.trim();
 }
 
 /** Format an energetics value (W m⁻² or J m⁻²) with SI suffix. */

@@ -9,10 +9,12 @@ import {
   FilterState,
   SummaryData,
   EMPTY_FILTERS,
-  Wind100YearData,
-  Wind100Meta,
-  Wind100Metric,
-  Wind100TimestepEntry,
+  EMPTY_INTENSITY,
+  DisplayVariable,
+  WindYearData,
+  WindMeta,
+  WindMetric,
+  WindTimestepEntry,
   BasinCollection,
   BasinIntersections,
   BasinFilterState,
@@ -22,16 +24,13 @@ import {
   loadSummary,
   loadYearDetails,
   getTrackDetail,
-  loadWind100Meta,
-  loadWind100Year,
+  loadWindMeta,
+  loadWindYear,
   loadBasins,
   loadBasinIntersections,
-  loadRawSummary,
-  loadRawYearDetails,
-  adaptRawSummaries,
-  expandRawDetail,
 } from "@/lib/dataLoader";
 import { filterTracks, filterTracksByBasin } from "@/lib/filters";
+import { windLevelFor } from "@/lib/windQuadrants";
 
 import FilterPanel from "@/components/FilterPanel";
 import AvailableTracksList from "@/components/AvailableTracksList";
@@ -54,6 +53,14 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
 
+  // ── Display variable ───────────────────────────────────────────────────────
+  // The single source of truth for "what is being shown". It drives the map's
+  // colour ramp, the intensity filter, the marker geometry and the height of
+  // every wind diagnostic. There is deliberately no separate wind-height state:
+  // two independent states could disagree, and a user reading a 10 m number
+  // under a 100 m heading has been misled.
+  const [displayVariable, setDisplayVariable] = useState<DisplayVariable>("vor42");
+
   // ── Filter state ───────────────────────────────────────────────────────────
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
 
@@ -64,32 +71,29 @@ export default function HomePage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  // ── Wind100 state ──────────────────────────────────────────────────────────
-  const [wind100Meta, setWind100Meta] = useState<Wind100Meta | null>(null);
-  const [wind100YearData, setWind100YearData] = useState<Wind100YearData | null>(null);
-  const [wind100Metric, setWind100Metric] = useState<Wind100Metric>("max");
-
-  // ── Track-only (raw catalogue) state ───────────────────────────────────────
-  const [rawTracks, setRawTracks] = useState<TrackSummary[] | null>(null);
-  const [rawLoading, setRawLoading] = useState(false);
+  // ── Wind state ─────────────────────────────────────────────────────────────
+  // Only the statistic is held here; the height comes from displayVariable.
+  const [windMeta, setWindMeta] = useState<WindMeta | null>(null);
+  const [windYearData, setWindYearData] = useState<WindYearData | null>(null);
+  const [windMetric, setWindMetric] = useState<WindMetric>("max");
 
   // ── Basin state ────────────────────────────────────────────────────────────
   const [basinCollection, setBasinCollection] = useState<BasinCollection | null>(null);
   const [basinIntersections, setBasinIntersections] = useState<BasinIntersections | null>(null);
   const [basinFilter, setBasinFilter] = useState<BasinFilterState>(EMPTY_BASIN_FILTER);
 
-  // ── Load summary + wind100 meta + basin data on mount ──────────────────────
+  // ── Load summary + wind meta + basin data on mount ─────────────────────────
   useEffect(() => {
     Promise.all([
       loadSummary(),
-      loadWind100Meta(),
+      loadWindMeta(),
       loadBasins(),
       loadBasinIntersections(),
     ])
       .then(([data, meta, basins, intersections]) => {
         setSummaryData(data);
-        setWind100Meta(meta); // null-safe: meta is null if file absent
-        setBasinCollection(basins); // null-safe: basins is null if file absent
+        setWindMeta(meta); // null-safe: meta is null if file absent
+        setBasinCollection(basins); // null-safe
         setBasinIntersections(intersections); // null-safe
         setInitialLoading(false);
       })
@@ -99,69 +103,72 @@ export default function HomePage() {
       });
   }, []);
 
-  // ── Track-only cyclones (lazy) ─────────────────────────────────────────────
-  // summary_raw.json is ~25 MB, so it is fetched only once the processing
-  // filter actually asks for track-only cyclones — never on first paint.
-  const needsRaw = filters.processing !== "processed";
+  // ── The active variable's descriptor ───────────────────────────────────────
+  // Both the colour ramp and the intensity filter read this one object, which is
+  // what makes it impossible for the map to be coloured by one quantity while
+  // the filter constrains another.
+  const displayInfo = useMemo(
+    () => summaryData?.display_variables?.[displayVariable] ?? null,
+    [summaryData, displayVariable],
+  );
 
-  useEffect(() => {
-    if (!needsRaw || rawTracks !== null || rawLoading) return;
-    setRawLoading(true);
-    loadRawSummary()
-      .then((raw) => setRawTracks(raw ? adaptRawSummaries(raw) : []))
-      .catch(() => setRawTracks([]))
-      .finally(() => setRawLoading(false));
-  }, [needsRaw, rawTracks, rawLoading]);
+  /** Which display variables this build actually has data for. */
+  const availableVariables = useMemo<DisplayVariable[]>(() => {
+    const dv = summaryData?.display_variables;
+    if (!dv) return ["vor42"];
+    return (["vor42", "wind10", "wind100"] as DisplayVariable[]).filter(
+      (v) => dv[v] && dv[v].n > 0,
+    );
+  }, [summaryData]);
+
+  /**
+   * Switching variable clears the intensity bounds.
+   *
+   * The bounds are plain numbers in the active variable's units, so carrying
+   * "≥ 8" from vorticity (×10⁻⁵ s⁻¹) over to 10 m wind (m s⁻¹) would silently
+   * apply a meaningless threshold to a different quantity.
+   */
+  const handleDisplayVariableChange = useCallback((next: DisplayVariable) => {
+    setDisplayVariable(next);
+    setFilters((f) => ({ ...f, intensity: EMPTY_INTENSITY }));
+  }, []);
 
   // ── Filtered track list ────────────────────────────────────────────────────
   const filteredTracks = useMemo(() => {
-    if (!summaryData) return [];
-    // Processed cyclones plus, when requested and already fetched, track-only ones
-    const all =
-      needsRaw && rawTracks
-        ? [...summaryData.tracks, ...rawTracks]
-        : summaryData.tracks;
-    // Apply standard filters (year, month, region, type, processing, intensity)
-    let tracks = filterTracks(all, filters);
-    // Apply basin filter
-    tracks = filterTracksByBasin(tracks, basinFilter, basinIntersections);
-    return tracks;
-  }, [summaryData, rawTracks, needsRaw, filters, basinFilter, basinIntersections]);
+    if (!summaryData || !displayInfo) return [];
+    const tracks = filterTracks(summaryData.tracks, filters, displayInfo);
+    return filterTracksByBasin(tracks, basinFilter, basinIntersections);
+  }, [summaryData, displayInfo, filters, basinFilter, basinIntersections]);
 
-  // ── Per-track wind100 lookup for the selected track ────────────────────────
-  const wind100TrackData = useMemo((): Record<string, Wind100TimestepEntry> | null => {
-    if (!selectedTrack || !wind100YearData) return null;
-    return wind100YearData.tracks[String(selectedTrack.id)] ?? null;
-  }, [selectedTrack, wind100YearData]);
+  // ── Per-track wind lookup for the selected track ───────────────────────────
+  const windTrackData = useMemo((): Record<string, WindTimestepEntry> | null => {
+    if (!selectedTrack || !windYearData) return null;
+    return windYearData.tracks[String(selectedTrack.id)] ?? null;
+  }, [selectedTrack, windYearData]);
+
+  // Level key ("w10" / "w100") implied by the display variable. Under
+  // vorticity this falls back to 10 m — see windLevelFor().
+  const windLevel = windLevelFor(displayVariable);
 
   // ── Track selection handler ────────────────────────────────────────────────
   const handleTrackSelect = useCallback(async (track: TrackSummary) => {
-    // Immediately highlight the selected track
     setSelectedTrack(track);
     setSelectedTimestep(null);
     setTimesteps(null);
     setDetailError(null);
     setDetailLoading(true);
-    setWind100YearData(null); // clear stale data while loading
+    setWindYearData(null); // clear stale data while loading
 
     try {
-      if (!track.processed) {
-        // Track-only cyclone: columnar details, and no wind100 lookup — the
-        // wind100 dataset is keyed by the processed catalogue's own IDs, which
-        // are a different tracking vintage from these tracks.
-        const rawYear = await loadRawYearDetails(track.year);
-        const detail = rawYear?.tracks[String(track.id)] ?? null;
-        setTimesteps(detail ? expandRawDetail(detail) : []);
-        setWind100YearData(null);
-      } else {
-        const [yearDetails, w100Year] = await Promise.all([
-          loadYearDetails(track.year),
-          loadWind100Year(track.year), // null if wind100 data absent
-        ]);
-        const detail = getTrackDetail(yearDetails, track.id);
-        setTimesteps(detail?.timesteps ?? []);
-        setWind100YearData(w100Year);
-      }
+      // One wind file per year carries both heights, so switching the display
+      // variable later needs no further fetch.
+      const [yearDetails, windYear] = await Promise.all([
+        loadYearDetails(track.year),
+        loadWindYear(track.year), // null if wind data absent
+      ]);
+      const detail = getTrackDetail(yearDetails, track.id);
+      setTimesteps(detail?.timesteps ?? []);
+      setWindYearData(windYear);
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : "Failed to load track details.");
     } finally {
@@ -174,7 +181,7 @@ export default function HomePage() {
     setTimesteps(null);
     setSelectedTimestep(null);
     setDetailError(null);
-    setWind100YearData(null);
+    setWindYearData(null);
   }, []);
 
   // ── Logout ─────────────────────────────────────────────────────────────────
@@ -190,7 +197,6 @@ export default function HomePage() {
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-gray-600 text-sm">Loading cyclone dataset…</p>
-          <p className="text-gray-400 text-xs mt-1">6 789 tracks · 1979–2020</p>
         </div>
       </div>
     );
@@ -215,8 +221,10 @@ export default function HomePage() {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <Header
-        totalTracks={summaryData!.total_tracks}
-        filteredCount={filteredTracks.length}
+        displayVariable={displayVariable}
+        availableVariables={availableVariables}
+        displayVariables={summaryData!.display_variables}
+        onDisplayVariableChange={handleDisplayVariableChange}
         onLogout={handleLogout}
       />
 
@@ -228,20 +236,22 @@ export default function HomePage() {
             filters={filters}
             onFiltersChange={setFilters}
             filteredCount={filteredTracks.length}
+            displayVariable={displayVariable}
+            displayInfo={displayInfo}
             basinCollection={basinCollection}
             basinIntersections={basinIntersections}
             basinFilter={basinFilter}
             onBasinFilterChange={setBasinFilter}
           />
 
-           {!selectedTrack && (
-             <AvailableTracksList
-               tracks={filteredTracks}
-               onTrackSelect={handleTrackSelect}
-             />
-           )}
+          {!selectedTrack && (
+            <AvailableTracksList
+              tracks={filteredTracks}
+              onTrackSelect={handleTrackSelect}
+            />
+          )}
 
-           {selectedTrack && (
+          {selectedTrack && (
             <TrackDetailPanel
               track={selectedTrack}
               timesteps={timesteps}
@@ -250,11 +260,13 @@ export default function HomePage() {
               onClear={handleClearSelection}
               loading={detailLoading}
               error={detailError}
-              quantileThresholds={summaryData!.quantile_thresholds}
-              wind100TrackData={wind100TrackData}
-              wind100Meta={wind100Meta}
-              wind100Metric={wind100Metric}
-              onWind100MetricChange={setWind100Metric}
+              displayVariable={displayVariable}
+              displayInfo={displayInfo}
+              windTrackData={windTrackData}
+              windMeta={windMeta}
+              windLevel={windLevel}
+              windMetric={windMetric}
+              onWindMetricChange={setWindMetric}
             />
           )}
         </aside>
@@ -266,13 +278,15 @@ export default function HomePage() {
             selectedTrack={selectedTrack}
             timesteps={timesteps}
             selectedTimestep={selectedTimestep}
-            quantileThresholds={summaryData!.quantile_thresholds}
+            displayVariable={displayVariable}
+            displayInfo={displayInfo}
             onTrackSelect={handleTrackSelect}
             onTimestepSelect={setSelectedTimestep}
             onClearSelection={handleClearSelection}
-            wind100TrackData={wind100TrackData}
-            wind100Meta={wind100Meta}
-            wind100Metric={wind100Metric}
+            windTrackData={windTrackData}
+            windMeta={windMeta}
+            windLevel={windLevel}
+            windMetric={windMetric}
             basinCollection={basinCollection}
             selectedBasins={basinFilter.selectedBasins}
           />

@@ -3,33 +3,63 @@ import {
   FilterState,
   BasinFilterState,
   BasinIntersections,
+  BasinTrackEntry,
   BasinFilterMode,
+  BasinWindHeight,
+  DisplayVariable,
+  DisplayVariableInfo,
   IntensityFilterState,
 } from "@/types/cyclone";
 
 /**
- * Does a track pass the intensity constraint on max_vor42?
+ * The track's peak value in a given display variable.
  *
- * - "range"  : min <= max_vor42 <= max
- * - "cutoff" : max_vor42 >= min  (the upper bound is ignored)
+ * Returns undefined when the cyclone carries no value for that variable, which
+ * the colour ramp renders gray and the intensity filter treats as "no opinion"
+ * unless the user has actually set a bound.
+ */
+export function trackValue(
+  track: TrackSummary,
+  info: DisplayVariableInfo
+): number | undefined {
+  return track[info.field];
+}
+
+/**
+ * Does a track pass the intensity constraint on the active display variable?
  *
- * A null bound is unbounded on that side, so the default state passes everything.
+ * - "range"  : min <= value <= max
+ * - "cutoff" : value >= min  (the upper bound is ignored)
+ *
+ * A null bound is unbounded on that side, so the default state passes
+ * everything. A track with no value for the active variable is excluded only
+ * once a bound is actually set — an unmeasured cyclone cannot be shown to
+ * satisfy a numeric threshold.
  */
 export function passesIntensity(
-  maxVor42: number,
+  value: number | undefined,
   intensity: IntensityFilterState
 ): boolean {
   const { mode, min, max } = intensity;
-  if (min !== null && maxVor42 < min) return false;
-  if (mode === "range" && max !== null && maxVor42 > max) return false;
+  const bounded = min !== null || (mode === "range" && max !== null);
+
+  if (value === undefined || value === null || !Number.isFinite(value)) {
+    return !bounded;
+  }
+  if (min !== null && value < min) return false;
+  if (mode === "range" && max !== null && value > max) return false;
   return true;
 }
 
 /**
  * Filter track summaries by every non-spatial constraint: year, month, genesis
- * region, structural type (CPS), warm seclusion, processing level and intensity.
+ * region, structural type (CPS), warm seclusion and intensity.
  *
  * Empty arrays / null bounds mean "no constraint".
+ *
+ * The intensity constraint applies to whichever display variable is active, so
+ * the caller passes that variable's descriptor. The map's colour ramp reads the
+ * same descriptor, which is what keeps the two from ever disagreeing.
  *
  * The CPS constraints are skipped for tracks with no CPS data only when the
  * filter itself is inactive — an active type filter deliberately excludes
@@ -37,7 +67,8 @@ export function passesIntensity(
  */
 export function filterTracks(
   tracks: TrackSummary[],
-  filters: FilterState
+  filters: FilterState,
+  displayInfo: DisplayVariableInfo
 ): TrackSummary[] {
   const {
     years,
@@ -46,7 +77,6 @@ export function filterTracks(
     cpsGroups,
     cpsClasses,
     warmSeclusionOnly,
-    processing,
     intensity,
   } = filters;
 
@@ -61,10 +91,7 @@ export function filterTracks(
       return false;
     if (warmSeclusionOnly && !t.warm_seclusion) return false;
 
-    if (processing === "processed" && !t.processed) return false;
-    if (processing === "raw" && t.processed) return false;
-
-    if (!passesIntensity(t.max_vor42, intensity)) return false;
+    if (!passesIntensity(trackValue(t, displayInfo), intensity)) return false;
 
     return true;
   });
@@ -79,7 +106,6 @@ export function hasActiveFilters(f: FilterState): boolean {
     f.cpsGroups.length > 0 ||
     f.cpsClasses.length > 0 ||
     f.warmSeclusionOnly ||
-    f.processing !== "all" ||
     f.intensity.min !== null ||
     f.intensity.max !== null
   );
@@ -91,68 +117,83 @@ export function toggleValue<T>(arr: T[], value: T): T[] {
 }
 
 /**
+ * The basin list a track's wind maxima intersect, at the requested height.
+ *
+ * "any" is a union — a logical OR across the two heights — which is why the
+ * control is labelled "Any" and not "Both": "Both" would read as requiring the
+ * condition to hold at 10 m AND at 100 m.
+ */
+function windBasins(
+  entry: BasinTrackEntry,
+  height: BasinWindHeight
+): string[] {
+  switch (height) {
+    case "10":
+      return entry.wind10 ?? [];
+    case "100":
+      return entry.wind100 ?? [];
+    case "any":
+    default:
+      return [...(entry.wind10 ?? []), ...(entry.wind100 ?? [])];
+  }
+}
+
+/**
  * Filter tracks by basin intersection.
- * 
- * @param tracks - List of tracks to filter
- * @param basinFilter - Basin filter state (selected basins and mode)
- * @param intersections - Pre-computed basin intersections data
- * @returns Filtered list of tracks that match the basin criteria
- * 
- * Filter modes:
- * - "center": Track's cyclone center passes through any selected basin
- * - "wind_max": Track's maximum wind position passes through any selected basin
- * - "any": Either center OR wind_max passes through any selected basin
+ *
+ * Two independent dimensions:
+ *
+ *   mode        WHICH positions are tested
+ *     "center"   the cyclone centre along the track
+ *     "wind_max" the position of the wind maximum
+ *     "any"      centre OR wind maximum
+ *
+ *   windHeight  WHICH height supplies the wind positions
+ *     "10" | "100" | "any"   ("any" = 10 m OR 100 m)
+ *
+ * windHeight is irrelevant when mode is "center", which tests no wind position
+ * at all.
+ *
+ * A track is kept when the selected positions fall inside ANY selected basin.
  */
 export function filterTracksByBasin(
   tracks: TrackSummary[],
   basinFilter: BasinFilterState,
   intersections: BasinIntersections | null
 ): TrackSummary[] {
-  const { selectedBasins, mode } = basinFilter;
-  
-  // No basin filter active
-  if (selectedBasins.length === 0) {
-    return tracks;
-  }
-  
-  // No intersection data available
-  if (!intersections) {
-    return tracks;
-  }
-  
+  const { selectedBasins, mode, windHeight } = basinFilter;
+
+  if (selectedBasins.length === 0) return tracks;
+  if (!intersections) return tracks;
+
   const selectedSet = new Set(selectedBasins);
-  
+
   return tracks.filter((track) => {
-    const trackIntersections = intersections.tracks[String(track.id)];
-    
-    // Track has no intersection data = doesn't intersect any basin
-    if (!trackIntersections) {
-      return false;
-    }
-    
-    // Get the relevant basin list based on filter mode
-    let relevantBasins: string[];
+    const entry = intersections.tracks[String(track.id)];
+
+    // No intersection record at all = intersects no basin.
+    if (!entry) return false;
+
+    let relevant: string[];
     switch (mode) {
       case "center":
-        relevantBasins = trackIntersections.center;
+        relevant = entry.center ?? [];
         break;
       case "wind_max":
-        relevantBasins = trackIntersections.wind_max;
+        relevant = windBasins(entry, windHeight);
         break;
       case "any":
-        relevantBasins = trackIntersections.any;
-        break;
       default:
-        relevantBasins = trackIntersections.any;
+        relevant = [...(entry.center ?? []), ...windBasins(entry, windHeight)];
+        break;
     }
-    
-    // Check if track intersects any of the selected basins
-    return relevantBasins.some((basinId) => selectedSet.has(basinId));
+
+    return relevant.some((basinId) => selectedSet.has(basinId));
   });
 }
 
 /**
- * Get display label for a basin filter mode.
+ * Display label for a basin filter mode.
  */
 export function getBasinFilterModeLabel(mode: BasinFilterMode): string {
   switch (mode) {
@@ -165,4 +206,32 @@ export function getBasinFilterModeLabel(mode: BasinFilterMode): string {
     default:
       return mode;
   }
+}
+
+/**
+ * Display label for the basin wind-height selector.
+ */
+export function getBasinWindHeightLabel(height: BasinWindHeight): string {
+  switch (height) {
+    case "10":
+      return "10 m";
+    case "100":
+      return "100 m";
+    case "any":
+      return "Any";
+    default:
+      return height;
+  }
+}
+
+/**
+ * Key into the per-basin count table for a given mode + height combination.
+ * Mirrors the keys emitted by scripts/compute_basin_intersections.py.
+ */
+export function basinStatKey(
+  mode: BasinFilterMode,
+  height: BasinWindHeight
+): string {
+  if (mode === "center") return "center";
+  return `${mode}_${height}`;
 }

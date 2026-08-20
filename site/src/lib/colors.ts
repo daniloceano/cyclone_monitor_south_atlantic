@@ -1,31 +1,31 @@
 /**
- * Intensity-based color utilities for cyclone track visualization.
+ * Intensity-based colour utilities for cyclone track visualisation.
  *
- * ## Color Scheme (unselected state only)
+ * ## Colour scheme (unselected state only)
  *
- * - **Gray (#9ca3af)**: Tracks with max_vor42 below the 10th percentile (p10).
- *   These are considered low-intensity cyclones.
+ * - **Gray (#9ca3af)**: tracks below the 10th percentile of the active
+ *   variable — the low-intensity tail.
+ * - **Yellow → orange → red**: tracks at or above p10.
+ *   - Yellow (#facc15): at p10
+ *   - Orange (#f97316): mid-range
+ *   - Red (#dc2626): at the maximum observed value
  *
- * - **Yellow → Orange → Red gradient**: Tracks at or above p10.
- *   - Yellow (#facc15): intensity at p10
- *   - Orange (#f97316): intensity at mid-range
- *   - Red (#dc2626): intensity at maximum observed value
+ * ## The active variable
  *
- * ## Intensity Variable
+ * The ramp is not tied to any one quantity. It is applied to whichever display
+ * variable is selected — central relative vorticity (×10⁻⁵ s⁻¹), 10 m wind, or
+ * 100 m wind (m s⁻¹) — using that variable's own thresholds.
  *
- * `max_vor42` — Maximum filtered and normalized relative vorticity (×10⁻⁵ s⁻¹)
- * along the cyclone track. This is computed at the cyclone level (not timestep),
- * and thresholds are calculated globally across all 6,789 tracks in the dataset.
+ * Thresholds are pre-computed per variable in `scripts/preprocess_data.py` and
+ * stored in `summary.json` under `display_variables[v].quantile_thresholds`.
+ * The intensity filter reads the same object, which is what guarantees the map
+ * and the filter can never describe different quantities. The scale is global
+ * across the dataset, not recomputed for the filtered subset.
  *
- * ## Percentile Calculation
- *
- * Percentiles are pre-computed in `scripts/preprocess_data.py` and stored in
- * `summary.json` under `quantile_thresholds`. The scale is global (entire dataset),
- * not dynamically recalculated for filtered subsets.
- *
- * Reference:
+ * References:
  *   - Gramcianinov et al. (2019), Climate Dynamics: cyclone tracking methodology
- *   - de Souza et al. (2025), JOSS: Cyclophaser lifecycle classification
+ *   - de Souza et al. (2025), JOSS: CycloPhaser lifecycle classification
+ *   - Paredes Quispe (2026), Zenodo: the 10 m and 100 m wind diagnostics
  */
 
 import { QuantileThresholds } from "@/types/cyclone";
@@ -58,25 +58,31 @@ function lerpColor(color1: string, color2: string, t: number): string {
 }
 
 /**
- * Get the intensity-based color for a track.
+ * Colour for a track's peak value in the active display variable.
  *
- * @param maxVor42 The track's maximum vor42 value
- * @param thresholds Global quantile thresholds from summary.json
- * @returns Hex color string
+ * @param value      the track's peak in the active variable
+ * @param thresholds that variable's quantile thresholds from summary.json
+ * @returns hex colour string
  *
- * Color mapping:
- *   - Below p10: gray
- *   - p10 to midpoint: yellow → orange gradient
- *   - midpoint to max: orange → red gradient
+ * Mapping:
+ *   - no value (variable unavailable for this cyclone): gray
+ *   - below p10: gray
+ *   - p10 → midpoint: yellow → orange
+ *   - midpoint → max: orange → red
  */
 export function getIntensityColor(
-  maxVor42: number,
+  value: number | undefined,
   thresholds: QuantileThresholds
 ): string {
+  // A cyclone with no value for the active variable is drawn in the same gray
+  // as the low tail rather than hidden: it is present, just not measured here.
+  if (value === undefined || value === null || !Number.isFinite(value)) {
+    return COLOR_GRAY;
+  }
+
   const { p10, max } = thresholds;
 
-  // Below p10 → gray
-  if (maxVor42 < p10) {
+  if (value < p10) {
     return COLOR_GRAY;
   }
 
@@ -86,7 +92,7 @@ export function getIntensityColor(
     return COLOR_YELLOW;
   }
 
-  const normalized = Math.min(1, Math.max(0, (maxVor42 - p10) / range));
+  const normalized = Math.min(1, Math.max(0, (value - p10) / range));
 
   // Two-stage gradient: yellow→orange (0–0.5), orange→red (0.5–1)
   if (normalized <= 0.5) {
@@ -96,30 +102,40 @@ export function getIntensityColor(
   }
 }
 
-/**
- * Legend data for the intensity color scale.
- * Returns stops for rendering a gradient legend.
- */
-export function getIntensityLegendStops(thresholds: QuantileThresholds): {
-  color: string;
-  label: string;
-  value: number;
-}[] {
-  const { p10, max } = thresholds;
-  const mid = p10 + (max - p10) / 2;
-
-  return [
-    { color: COLOR_GRAY, label: `< p10`, value: 0 },
-    { color: COLOR_YELLOW, label: `p10 (${p10.toFixed(1)})`, value: p10 },
-    { color: COLOR_ORANGE, label: `${mid.toFixed(1)}`, value: mid },
-    { color: COLOR_RED, label: `max (${max.toFixed(1)})`, value: max },
-  ];
-}
-
-// Export color constants for legend component
+// Colour constants, for the legend component.
 export const INTENSITY_COLORS = {
   gray: COLOR_GRAY,
   yellow: COLOR_YELLOW,
   orange: COLOR_ORANGE,
   red: COLOR_RED,
 };
+
+/** Rank labels, strongest first. */
+export type QuantileRank =
+  | "top 5%"
+  | "top 10%"
+  | "top 25%"
+  | "top 50%"
+  | "bottom 50%";
+
+/**
+ * Where a value sits in the distribution of the active display variable.
+ *
+ * Derived here rather than baked into summary.json because the answer depends
+ * on which variable is active: a cyclone in the top 5% by vorticity need not be
+ * in the top 5% by 10 m wind. Computing it from the same thresholds the colour
+ * ramp uses keeps the rank and the colour consistent by construction.
+ */
+export function quantileRank(
+  value: number | undefined,
+  thresholds: QuantileThresholds
+): QuantileRank | null {
+  if (value === undefined || value === null || !Number.isFinite(value)) {
+    return null;
+  }
+  if (value >= thresholds.p95) return "top 5%";
+  if (value >= thresholds.p90) return "top 10%";
+  if (value >= thresholds.p75) return "top 25%";
+  if (value >= thresholds.p50) return "top 50%";
+  return "bottom 50%";
+}

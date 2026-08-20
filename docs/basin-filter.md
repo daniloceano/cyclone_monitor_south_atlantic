@@ -73,27 +73,8 @@ python3 scripts/compute_basin_intersections.py
 | `basins.geojson` | ~614 KB | GeoJSON FeatureCollection with all 16 basins |
 | `basin_intersections.json` | ~172 KB | Pre-computed track-basin intersections |
 
-## Spatial Filter Modes
-
-### 1. Cyclone Center Inside Basin
-
-A track satisfies this condition if its center coordinates pass through the basin at **any timestep** during the cyclone's lifecycle.
-
-**Use case**: Finding cyclones that physically tracked through a basin.
-
-### 2. Maximum Wind Inside Basin
-
-A track satisfies this condition if the position of maximum 100m wind (from wind100_max) falls inside the basin at **any timestep**.
-
-**Use case**: Finding cyclones whose strongest winds affected a basin, even if the cyclone center was elsewhere.
-
-**Technical note**: The wind100 data contains absolute coordinates `[lon, lat, wind_speed, distance]` for each quadrant. The filter uses the position from the quadrant with the global maximum (indicated by the `gq` field).
-
-### 3. Center OR Maximum Wind (Default)
-
-A track satisfies this condition if **either** the center or maximum wind position passes through the basin.
-
-**Use case**: Comprehensive filtering to find all cyclones that could have impacted a basin.
+> The filter modes and the wind-height dimension are documented under
+> [Two independent dimensions](#two-independent-dimensions) below.
 
 ## Frontend Implementation
 
@@ -170,24 +151,6 @@ function filterTracksByBasin(
 }
 ```
 
-## Available Basins
-
-| ID | Display Name | Tracks (Any) |
-|----|--------------|--------------|
-| `pelotas` | Bacia de Pelotas | 1,847 |
-| `santos` | Bacia de Santos | 792 |
-| `campos` | Bacia de Campos | 462 |
-| `espirito-santo` | Bacia do Espírito Santo | 89 |
-| `mucuri` | Bacia de Mucuri | 25 |
-| `cumuruxatiba` | Bacia de Cumuruxatiba | 16 |
-| `jequitinhonha` | Bacia de Jequitinhonha | 5 |
-| `camamu-almada` | Bacia de Camamu-Almada | 2 |
-| `jacuipe` | Bacia de Jacuípe | 1 |
-| `seal` | Bacia de Sergipe-Alagoas (SEAL) | 1 |
-| Others | Northern basins | 0 |
-
-> **Note**: Southern basins dominate because they lie in the main extratropical cyclone track region. Northern basins (Ceará, Barreirinhas, Pará-Maranhão, Foz do Amazonas) have zero intersections with the extratropical cyclone dataset.
-
 ## Adding New Basins
 
 To add a new basin:
@@ -208,7 +171,7 @@ To add a new basin:
 
 1. **Static intersection data**: Intersections are pre-computed; runtime spatial queries are not performed. This enables fast filtering but requires re-running scripts if track data changes.
 
-2. **Wind100 data availability**: Maximum wind filter only works for tracks with wind100 data. Tracks without wind100 data will not match "wind_max" or "any" filter modes based on wind position.
+2. **Wind coverage**: every cyclone in the catalogue has wind data at both heights (6,789 / 6,789, 100 % of timesteps), so the wind modes exclude nothing on availability grounds. A track with no intersection record simply intersects no basin.
 
 3. **Point-in-polygon precision**: The filter tests individual points (cyclone center, wind max position) against basin polygons. It does not consider track segments or buffer zones.
 
@@ -221,3 +184,73 @@ To add a new basin:
 - **No reprojection needed**: All data remains in WGS84 throughout the pipeline
 
 The processing script validates CRS for each shapefile and will reproject if necessary, but in practice all current basins are already in WGS84.
+
+---
+
+## Two independent dimensions
+
+The filter has two orthogonal controls. Mixing them up is the easy mistake, so
+they are named for what they each decide:
+
+**Mode — WHICH positions are tested**
+
+| Mode | Test |
+|---|---|
+| `center` | the cyclone centre, at any timestep |
+| `wind_max` | the position of the wind maximum, at any timestep |
+| `any` | centre **OR** wind maximum |
+
+**Wind height — WHICH height supplies the wind positions**
+
+| Height | Test |
+|---|---|
+| `10 m` | the 10 m wind maximum |
+| `100 m` | the 100 m wind maximum |
+| `Any` | the 10 m **OR** the 100 m wind maximum |
+
+`Any` is a logical **OR**, which is why the control is not labelled "Both" —
+"Both" would read as requiring the condition to hold at 10 m *and* at 100 m.
+
+The height is irrelevant when the mode is `center`, which tests no wind position
+at all; the control is disabled there.
+
+The wind position is taken at the quadrant carrying the timestep maximum, using
+the `max` statistic. `p99` is a detailed diagnostic and never drives the spatial
+filter.
+
+## Precomputed data
+
+`scripts/compute_basin_intersections.py` stores only the three primitive sets per
+track — `center`, `wind10`, `wind100`. Every union the interface needs is derived
+from those in the browser, so adding a wind level means one more array per track
+rather than a combinatorial explosion of precomputed unions.
+
+```json
+"19790063": {"center": [], "wind10": ["pelotas"], "wind100": ["pelotas"]}
+```
+
+Per-basin counts are precomputed for each mode × height combination, keyed as
+`center`, `wind_max_10`, `wind_max_100`, `wind_max_any`, `any_10`, `any_100`,
+`any_any` — the same keys `basinStatKey()` builds in `site/src/lib/filters.ts`.
+These are dataset-wide counts shown beside each basin, not counts within the
+currently applied filter.
+
+## Track counts by basin
+
+| Basin | Centre | Wind 10 m | Wind 100 m | Wind any | Any |
+|---|---|---|---|---|---|
+| Bacia de Pelotas | 1188 | 1667 | 1551 | 1724 | 1958 |
+| Bacia de Santos | 444 | 667 | 625 | 717 | 860 |
+| Bacia de Campos | 149 | 393 | 409 | 446 | 492 |
+| Bacia de Espírito Santo | 13 | 84 | 83 | 94 | 100 |
+| Bacia de Mucuri | 4 | 26 | 23 | 27 | 29 |
+| Bacia de Cumuruxatiba | 1 | 16 | 15 | 17 | 18 |
+| Bacia de Jequitinhonha | 2 | 5 | 4 | 5 | 6 |
+| Bacia de Camamu-Almada | 0 | 3 | 1 | 3 | 3 |
+| Bacia de Jacuípe | 0 | 2 | 2 | 2 | 2 |
+| Bacia de Sergipe-Alagoas (SEAL) | 0 | 1 | 1 | 1 | 1 |
+
+Basins north of about 15°S record no intersections: extratropical cyclones and
+their wind maxima do not reach them. The 10 m and 100 m columns differ slightly
+because the strongest wind sits in a marginally different place at each height.
+

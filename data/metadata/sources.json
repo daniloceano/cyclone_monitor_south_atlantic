@@ -1,0 +1,300 @@
+{
+  "$comment": [
+    "Canonical provenance registry for the South Atlantic Cyclone Monitor.",
+    "",
+    "This file is the single source of truth for where every dataset came from.",
+    "The pipeline reads it and emits site/public/data/sources.json, which the",
+    "About page renders; data/SOURCES.md is generated from it too. Do not",
+    "restate DOIs or citations in README files - point at this registry, so a",
+    "correction lands in one place instead of five.",
+    "",
+    "Field notes:",
+    "  role       : what this source contributes to the monitor",
+    "  variables  : the monitor columns/fields that originate here",
+    "  transforms : what the pipeline does to the data locally",
+    "  kind       : 'data' for a distributed dataset, 'method' for the",
+    "               publication that documents how it was produced"
+  ],
+  "generated_by": "maintained by hand; consumed by scripts/preprocess_data.py",
+  "sources": {
+    "tracks_lec": {
+      "kind": "data",
+      "name": "Southwestern Atlantic Cyclone Tracks and Semi-Lagrangian LEC diagnostics (1979-2020)",
+      "authors": ["Couto de Souza, Danilo", "Gramcianinov, Carolina B."],
+      "year": 2025,
+      "doi": "10.5281/zenodo.18133432",
+      "url": "https://doi.org/10.5281/zenodo.18133432",
+      "repository": "Zenodo",
+      "license": "CC-BY-4.0",
+      "role": "The catalogue itself: every cyclone in the monitor, its track, and its energetics.",
+      "variables": [
+        "track_id", "date", "lon", "lat", "vor42", "region", "period",
+        "Az", "Ae", "Kz", "Ke", "Cz", "Ca", "Ck", "Ce",
+        "BAz", "BAe", "BKz", "BKe", "BPhiZ", "BPhiE", "Gz", "Ge",
+        "dAzdt", "dAedt", "dKzdt", "dKedt", "RGz", "RGe", "RKz", "RKe"
+      ],
+      "coverage": {
+        "period": "1979-01-01 to 2021-01-07",
+        "cyclones": 6789,
+        "timesteps": 631009,
+        "native_resolution": "tracks 1-hourly; LEC terms 3-hourly"
+      },
+      "transforms": [
+        "Column names standardised (e.g. 'lon vor' -> 'lon', 'dAz/dt (finite diff.)' -> 'dAzdt').",
+        "The 24 LEC terms are linearly interpolated from their native 3-hourly step to 1-hourly within each track; 'lec_original' is True on the original values. Coverage after interpolation is 97.8%, the remainder being track first/last hours where interpolation has nothing to bracket.",
+        "No spatial or temporal subsetting."
+      ]
+    },
+
+    "tracking_method": {
+      "kind": "method",
+      "name": "Atlantic extratropical cyclone tracks in 41 years of ERA5 and CFSR/CFSv2 databases",
+      "authors": [
+        "Gramcianinov, Carolina B.", "Campos, Ricardo M.", "de Camargo, Ricardo",
+        "Hodges, Kevin I.", "Guedes Soares, Carlos", "Peliz, Alvaro"
+      ],
+      "year": 2020,
+      "version": "V4",
+      "doi": "10.17632/kwcvfr52hp.4",
+      "url": "https://doi.org/10.17632/kwcvfr52hp.4",
+      "repository": "Mendeley Data",
+      "role": "The published cyclone-tracking dataset and method behind the catalogue: feature tracking of relative vorticity at 850 hPa, spectrally filtered to T42 - which is what 'vor42' means.",
+      "variables": ["vor42", "track geometry"],
+      "transforms": []
+    },
+
+    "genesis_regions": {
+      "kind": "method",
+      "name": "The properties and genesis environments of South Atlantic cyclones",
+      "authors": ["Gramcianinov, Carolina B.", "Hodges, Kevin I.", "Camargo, Ricardo de"],
+      "year": 2019,
+      "journal": "Climate Dynamics",
+      "volume": "53(7)",
+      "pages": "4115-4140",
+      "doi": "10.1007/s00382-019-04778-7",
+      "url": "https://doi.org/10.1007/s00382-019-04778-7",
+      "role": "Definition of the genesis hotspots used to label each cyclone.",
+      "variables": ["region"],
+      "transforms": [
+        "Short codes in the source are mapped to display names: ARG -> Southeastern Argentina, LA-PLATA -> La Plata River Discharge, SE-BR -> Southeast Brazil."
+      ]
+    },
+
+    "lec_method": {
+      "kind": "method",
+      "name": "Lorenz Energy Cycle Climatology for the Southwestern Atlantic Cyclones",
+      "authors": [
+        "De Souza, Danilo C.", "Silva Dias, Pedro L. da",
+        "Gramcianinov, Carolina B.", "Camargo, Ricardo de"
+      ],
+      "year": 2025,
+      "journal": "Climate Dynamics",
+      "volume": "63(11)",
+      "pages": "1-26",
+      "doi": "10.1007/s00382-024-07555-z",
+      "url": "https://doi.org/10.1007/s00382-024-07555-z",
+      "role": "How the semi-Lagrangian Lorenz Energy Cycle terms are computed and what they mean.",
+      "variables": ["Az", "Ae", "Kz", "Ke", "conversion, generation, boundary and residual terms"],
+      "transforms": []
+    },
+
+    "lifecycle_phases": {
+      "kind": "method",
+      "name": "CycloPhaser: A Python package for detecting extratropical cyclone life cycles",
+      "authors": [
+        "de Souza, Danilo C.", "da Silva Dias, Pedro L.",
+        "Gramcianinov, Carolina B.", "de Camargo, Ricardo"
+      ],
+      "year": 2025,
+      "journal": "Journal of Open Source Software",
+      "volume": "10(108)",
+      "pages": "7363",
+      "doi": "10.21105/joss.07363",
+      "url": "https://doi.org/10.21105/joss.07363",
+      "role": "Objective per-timestep lifecycle phase labels derived from the vorticity evolution.",
+      "variables": ["period"],
+      "transforms": []
+    },
+
+    "cyclone_phase_space": {
+      "kind": "data",
+      "name": "Cyclone Phase Space classification of Southwestern Atlantic cyclones (1979-2020)",
+      "authors": ["Rodriguez, Andres", "Couto de Souza, Danilo"],
+      "year": 2026,
+      "status": "in preparation",
+      "doi": null,
+      "pending": true,
+      "pending_note": "Being prepared for deposit on Zenodo. Until then it is exported by hand from the paper_energy_patterns project (scripts/cps_analysis/export_cps_for_monitor.py) into data/raw/, and is not reproducible from a public download.",
+      "repository": "IAG-USP, paper_energy_patterns project",
+      "role": "Thermal-structure diagnostics in the Hart (2003) Cyclone Phase Space, at two distinct grains: a per-timestep state and a per-cyclone category.",
+      "variables": [
+        "cps_B", "cps_VTL", "cps_VTU", "cps_size_km", "cps_dir", "cps_over_ocean",
+        "cps_class (per-timestep raw threshold label)",
+        "cps_state (per-timestep guarded persistent state)",
+        "phase_class (per-cyclone category)", "class_kind", "is_identified"
+      ],
+      "coverage": {
+        "cyclones_with_cps": 6776,
+        "cyclones_total": 6789,
+        "timesteps": 212996,
+        "native_resolution": "3-hourly"
+      },
+      "transforms": [
+        "Parameters are merged onto the 1-hourly catalogue by (track_id, date); 100% of CPS keys match a catalogue row.",
+        "B/VTL/VTU/SIZE are linearly interpolated to 1-hourly, 'dir' circularly, 'over_ocean' by fill; 'cps_original' is True on computed values. cps_class is re-derived from the thresholds at interpolated rows only.",
+        "The 13 cyclones without a CPS series are carried explicitly with phase_class = 'no_cps_data' so a join on track_id never silently loses them."
+      ],
+      "conventions": [
+        "Southern-Hemisphere sign convention: VTL and VTU hold Hart's signed -V_T, so positive means warm core.",
+        "A '*_like' class (EC_like, SC_like, TC_like) means the structure was dominant but never sustained for 36 h. It is a description of characteristics, NOT an identification: grouping SC_like under 'Subtropical' asserts something the classification explicitly refuses to assert. Use class_kind / is_identified, never a string prefix match.",
+        "A cyclone's category (phase_class) and its state at a given hour (cps_state) are different things and are stored separately."
+      ]
+    },
+
+    "wind10": {
+      "kind": "data",
+      "name": "Maximum and 99th percentile wind speeds at 10 meters within a Lagrangian domain centered on extratropical cyclones in the South Atlantic (1979-2020)",
+      "authors": ["Paredes Quispe, Jonathan Aaron"],
+      "orcid": ["0000-0001-8660-745X"],
+      "affiliation": "Universidade de Sao Paulo",
+      "year": 2026,
+      "version": "1.0.0",
+      "publication_date": "2026-04-01",
+      "doi": "10.5281/zenodo.19378255",
+      "url": "https://doi.org/10.5281/zenodo.19378255",
+      "repository": "Zenodo",
+      "license": "CC-BY-4.0",
+      "md5": "753030a447d337e6375bd14463ac3a23",
+      "role": "Per-quadrant 10 m wind extrema at every timestep: the Wind 10 m display variable, its intensity filter, the map markers and the sidebar quadrant statistics.",
+      "variables": ["w10max_* (16 quadrant fields + global quadrant)", "w10p99_* (idem)"],
+      "coverage": {
+        "period": "1979-2020 per the record; a 2021 directory holding one cyclone is present and consistent with the catalogue ending 2021-01-07",
+        "track_ids": 7987,
+        "native_resolution": "1-hourly"
+      },
+      "transforms": [
+        "Two-pass extraction (the record is a tarball of per-year tarballs).",
+        "Columns renamed to the standardised {prefix}{metric}_{quadrant}_{field} scheme.",
+        "LEFT-joined onto the catalogue by (track_id, timestamp). Never interpolated: NaN is preserved where no wind record matches.",
+        "The 1,198 track_ids present only in the wind archives are not in the energetics catalogue and are skipped."
+      ],
+      "conventions": [
+        "Method: a 20x20 degree Lagrangian domain centred on the cyclone core (tracked by relative vorticity at 850 hPa); absolute maxima and 99th percentiles taken within a circular mask of 9.5 degree radius after Gaussian smoothing (sigma = 0.25).",
+        "'dis' is a Euclidean distance in degrees, hypot(dlon, dlat) - NOT great-circle. Verified locally to 1e-14 deg.",
+        "The Zenodo description states that mx_mx_max / mx_mx_p99 hold 'the maximum value across all quadrants'. They do not: the column holds the NAME of the quadrant carrying the extremum. Verified to be exactly the argmax of the four quadrant values over 74,242 comparisons.",
+        "The producer's N/S quadrant labels are inverted relative to the geographic convention; the correction is applied in the presentation layer only, so stored data stay a faithful copy of the archive."
+      ]
+    },
+
+    "wind100": {
+      "kind": "data",
+      "name": "Maximum wind speeds and 99th percentile values at 100 meters associated with extratropical cyclones in the South Atlantic (1979-2020)",
+      "authors": ["Paredes Quispe, Jonathan Aaron"],
+      "orcid": ["0000-0001-8660-745X"],
+      "affiliation": "Universidade de Sao Paulo",
+      "year": 2026,
+      "version": "1.0.0",
+      "publication_date": "2026-03-31",
+      "doi": "10.5281/zenodo.19353037",
+      "url": "https://doi.org/10.5281/zenodo.19353037",
+      "repository": "Zenodo",
+      "license": "CC-BY-4.0",
+      "md5": "4eaef49b4c53b5ef81cece06680fca31",
+      "role": "Per-quadrant 100 m wind extrema at every timestep: the Wind 100 m display variable, its intensity filter, the map markers, the sidebar quadrant statistics and the sedimentary-basin wind filter.",
+      "variables": ["w100max_* (16 quadrant fields + global quadrant)", "w100p99_* (idem)"],
+      "coverage": {
+        "period": "1979-2020 per the record; a 2021 directory holding one cyclone is present and consistent with the catalogue ending 2021-01-07",
+        "track_ids": 7987,
+        "native_resolution": "1-hourly"
+      },
+      "transforms": [
+        "Identical to wind10 - the two datasets share a producer, a method and a layout."
+      ],
+      "conventions": [
+        "Same as wind10: 20x20 degree Lagrangian domain, 9.5 degree circular mask, Gaussian smoothing; Euclidean 'dis' in degrees; mx_mx_* is a quadrant label, not a value; inverted N/S labels corrected in the presentation layer."
+      ]
+    },
+
+    "era5": {
+      "kind": "data",
+      "name": "The ERA5 global reanalysis",
+      "authors": ["Hersbach, Hans", "and co-authors"],
+      "year": 2020,
+      "journal": "Quarterly Journal of the Royal Meteorological Society",
+      "volume": "146(730)",
+      "pages": "1999-2049",
+      "doi": "10.1002/qj.3803",
+      "url": "https://doi.org/10.1002/qj.3803",
+      "repository": "Copernicus Climate Data Store",
+      "role": "The underlying reanalysis from which the tracking, the energetics, the phase-space parameters and both wind datasets are derived. The monitor never reads ERA5 directly.",
+      "variables": [],
+      "transforms": []
+    },
+
+    "sedimentary_basins": {
+      "kind": "data",
+      "name": "Brazilian offshore sedimentary basins",
+      "authors": ["Agencia Nacional do Petroleo, Gas Natural e Biocombustiveis (ANP)"],
+      "repository": "ANP Geographic Information System (gishub)",
+      "url": "https://gishub.anp.gov.br/",
+      "role": "Basin polygons used by the sedimentary-basin filter.",
+      "variables": ["basin id", "basin geometry"],
+      "coverage": {"basins": 16},
+      "transforms": [
+        "Shapefiles converted to GeoJSON; geometries repaired with make_valid(); CRS verified as EPSG:4326 with no reprojection; basin ids normalised."
+      ]
+    }
+  },
+
+  "additional_references": {
+    "hart2003": {
+      "name": "A cyclone phase space derived from thermal wind and thermal asymmetry",
+      "authors": ["Hart, Robert E."], "year": 2003,
+      "journal": "Monthly Weather Review", "volume": "131(4)", "pages": "585-616",
+      "doi": "10.1175/1520-0493(2003)131<0585:ACPSDF>2.0.CO;2",
+      "role": "The Cyclone Phase Space framework itself."
+    },
+    "lorenz1955": {
+      "name": "Available potential energy and the maintenance of the general circulation",
+      "authors": ["Lorenz, Edward N."], "year": 1955,
+      "journal": "Tellus", "volume": "7(2)", "pages": "157-167",
+      "doi": "10.3402/tellusa.v7i2.8796",
+      "role": "The energy-cycle formulation the LEC diagnostics implement."
+    },
+    "hodges1999": {
+      "name": "Adaptive constraints for feature tracking",
+      "authors": ["Hodges, Kevin I."], "year": 1999,
+      "journal": "Monthly Weather Review", "volume": "127(6)", "pages": "1362-1373",
+      "doi": "10.1175/1520-0493(1999)127<1362:ACFFT>2.0.CO;2",
+      "role": "The TRACK feature-tracking algorithm behind the cyclone catalogue."
+    },
+    "gozzo2014": {
+      "name": "Subtropical cyclones over the southwestern South Atlantic: climatological aspects and case study",
+      "authors": ["Gozzo, Luiz F.", "da Rocha, Rosmeri P.", "Reboita, Michelle S.", "Sugahara, Shigetoshi"],
+      "year": 2014, "journal": "Journal of Climate", "volume": "27(22)", "pages": "8543-8562",
+      "doi": "10.1175/JCLI-D-14-00149.1",
+      "role": "Source of the subtropical thresholds and of the genesis-band and ocean-fraction identification criteria."
+    },
+    "guishard2009": {
+      "name": "Atlantic subtropical storms. Part II: Climatology",
+      "authors": ["Guishard, Mark P.", "Evans, Jenni L.", "Hart, Robert E."],
+      "year": 2009, "journal": "Journal of Climate", "volume": "22(13)", "pages": "3574-3594",
+      "doi": "10.1175/2008JCLI2346.1",
+      "role": "Source of the 36 h persistence requirement applied to phase-space classes."
+    },
+    "couto2024": {
+      "name": "New perspectives on South Atlantic storm track through an automatic method for detecting extratropical cyclones' lifecycle",
+      "authors": ["Couto de Souza, Danilo", "and co-authors"], "year": 2024,
+      "journal": "International Journal of Climatology", "volume": "44(10)", "pages": "3568-3588",
+      "doi": "10.1002/joc.8566",
+      "role": "The lifecycle-phase framework and its colour convention."
+    },
+    "gramcianinov2020oe": {
+      "name": "Analysis of Atlantic extratropical storm tracks characteristics in 41 years of ERA5 and CFSR/CFSv2 databases",
+      "authors": ["Gramcianinov, Carolina B.", "Campos, Ricardo M.", "Guedes Soares, Carlos", "de Camargo, Ricardo"],
+      "year": 2020, "journal": "Ocean Engineering", "volume": "216", "pages": "108111",
+      "doi": "10.1016/j.oceaneng.2020.108111",
+      "role": "Companion analysis of the tracking dataset."
+    }
+  }
+}

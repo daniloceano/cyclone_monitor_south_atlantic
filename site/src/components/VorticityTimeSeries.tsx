@@ -45,7 +45,9 @@ interface ChartDataPoint {
  *   - Dissipation: gray (#9e9e9e)
  *
  * Variable:
- *   vor42 = filtered and normalized relative vorticity (×10⁻⁵ s⁻¹)
+ *   Central relative vorticity — relative vorticity at 850 hPa, spectrally
+ *   filtered to T42 and stored as a magnitude (×10⁻⁵ s⁻¹). The column is named
+ *   vor42 internally; that name is not shown to the user.
  *   This is the central tracking vorticity from CycloPhaser/Hodges tracking.
  */
 export default function VorticityTimeSeries({
@@ -171,7 +173,7 @@ export default function VorticityTimeSeries({
                 const phase = (props.payload as any)?.phase;
                 return [
                   `${numValue.toFixed(3)} ×10⁻⁵ s⁻¹ (${PHASE_LABELS[phase] ?? phase})`,
-                  "vor42",
+                  "Central relative vorticity",
                 ];
               }}
             />
@@ -184,7 +186,7 @@ export default function VorticityTimeSeries({
               strokeWidth={2}
               dot={false}
               activeDot={{ r: 6, fill: "#1e40af", stroke: "#fff", strokeWidth: 2 }}
-              name="vor42"
+              name="Central relative vorticity"
             />
 
             {/* Marker for selected timestep */}
@@ -219,7 +221,8 @@ export default function VorticityTimeSeries({
 
       {/* Info text */}
       <p className="text-[9px] text-gray-400 px-1">
-        Click on chart to select timestep · vor42 = filtered relative vorticity (×10⁻⁵ s⁻¹)
+        Click on chart to select timestep · relative vorticity at 850 hPa,
+        T42-filtered (×10⁻⁵ s⁻¹)
       </p>
     </div>
   );

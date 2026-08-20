@@ -18,7 +18,7 @@ git push
 ```
 
 > If `site/public/data/` is large (>1 GB), consider using Git LFS.
-> For this dataset (~90 MB total), standard git works fine.
+> For this dataset (~583 MB total), standard git works fine.
 
 ## Step 2 — Import project in Vercel
 
