@@ -241,8 +241,12 @@ def save_geojson(gdf: gpd.GeoDataFrame, output_path: Path) -> None:
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(geojson, f, ensure_ascii=False, separators=(',', ':'))
     
-    # Also write a pretty version for debugging (optional)
-    debug_path = output_path.with_suffix('.debug.geojson')
+    # Pretty-printed copy for inspection. It goes to data/interim/ rather than
+    # beside the production file: nothing fetches it, and under site/public/ it
+    # was 2.4 MB of committed, deployed dead weight.
+    debug_dir = PROJECT_ROOT / "data" / "interim"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    debug_path = debug_dir / (output_path.stem + '.debug.geojson')
     with open(debug_path, 'w', encoding='utf-8') as f:
         json.dump(geojson, f, ensure_ascii=False, indent=2)
     

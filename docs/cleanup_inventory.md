@@ -3,10 +3,13 @@
 Artefacts that became redundant when the pipeline was consolidated (wind10
 integration, `tracks_by_id` as the single analysis product, track-only removal).
 
-**Nothing in this file has been deleted.** It is a proposal awaiting explicit
-authorisation. Sizes measured 2026-08-20 on swell.
+> **STATUS: executed 2026-08-20.** Categories A and the two wind
+> tarballs from B were removed with explicit authorisation, recovering
+> **879 MB**. The consolidated CSV was deliberately kept — the pipeline reads it
+> — and everything in category C is untouched. The tables below are retained as
+> the record of what was removed and why.
 
-`data/` currently totals **3.2 GB**.
+Sizes measured 2026-08-20 on swell, before removal. `data/` totalled **3.2 GB**.
 
 ---
 
@@ -20,7 +23,7 @@ superseded by a product that is already verified.
 | `data/processed/tracks_raw_catalogue.csv` | **167.4 MB** | Deduplicated track-only catalogue — the 24,044 cyclones the removed "track only" population was built from | Nothing. The feature is gone end to end. | Yes, but only by restoring the two deleted ingest scripts from git history *and* re-downloading the Mendeley archive | **None** — no code path reads it |
 | `data/raw/gramcianinov_catalogue_v4.zip` | **179.3 MB** | Mendeley v4 bulk download, the source of the track-only catalogue | Nothing | Yes — public download, `10.17632/kwcvfr52hp.4` | **None** |
 | `data/raw/gramcianinov_catalogue/` | **170.8 MB** | The extracted `ERA5/ExSAt` tree from the zip above | Nothing | Yes — re-extract from the zip, or re-download | **None** |
-| `site/public/data/basins.debug.geojson` | **2.5 MB** | Debug variant of the basin polygons | Never fetched by any component (grep-verified across `site/src` and `scripts/`) | Yes — `scripts/process_sedimentary_basins.py` | **None**. Note this one is **git-tracked**, so removing it also shrinks the repo |
+| `site/public/data/basins.debug.geojson` | **2.5 MB** | Debug variant of the basin polygons | Never fetched by any component (grep-verified across `site/src` and `scripts/`) | Yes — `scripts/process_sedimentary_basins.py` | **None**. It was **git-tracked**, so removing it also shrank the deployed assets. The generator now writes this copy to `data/interim/` instead, so it cannot return to git |
 
 **Subtotal: ~520 MB**, of which 2.5 MB also leaves git.
 
@@ -43,7 +46,9 @@ Defensible to keep, but nothing in the current pipeline reads them.
 | `data/raw/wind100.tar.gz` | **182.3 MB** | Same | Same |
 | `data/processed/tracks_south_atlantic_consolidated.csv` | **389.2 MB** | Every column in it is present in `tracks_by_id/`, which is the product everything now reads for analysis | **Recommend keeping.** `scripts/preprocess_data.py` reads it directly to build `summary.json` and `details/`, and `merge_wind.py` reads it as its left side. Removing it makes both steps re-run the upstream preprocessing. Listed here only for completeness |
 
-**Subtotal if the two tarballs go: ~360 MB.**
+**Removed: the two tarballs, ~360 MB.** The extracted trees were verified present
+(15,974 CSV files each) before deleting, and `download_wind.py` re-fetches and
+re-verifies them on demand.
 
 ---
 
@@ -83,4 +88,6 @@ column growth and nothing else. File count is exactly 6,789.
 | B — consolidated CSV (**not** recommended) | 389 MB |
 | **Realistic total (A + tarballs)** | **~880 MB** |
 
-Awaiting authorisation before any deletion.
+**Executed 2026-08-20: 879 MB recovered.** After removal every
+pipeline script still parses, and `merge_wind.py --dry-run` still indexes 7,987
+track IDs per level at 100 % timestep coverage.
